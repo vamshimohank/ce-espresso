@@ -26,7 +26,7 @@ MODULE input_parameters
 !=----------------------------------------------------------------------------=!
   !
   USE kinds,      ONLY : DP
-  USE parameters, ONLY : nsx, npk, lqmax, lmaxx
+  USE parameters, ONLY : nsx, lqmax
   USE wannier_new,ONLY : wannier_data
   !
   IMPLICIT NONE
@@ -103,8 +103,8 @@ MODULE input_parameters
         CHARACTER(len=80) :: verbosity = 'default'
           ! define the verbosity of the code output
         CHARACTER(len=80) :: verbosity_allowed(6)
-        DATA verbosity_allowed / 'high' , 'medium', 'default' , 'low' , 'minimal' ,&
-                                 'default+projwfc' /
+        DATA verbosity_allowed / 'debug', 'high', 'medium', 'default', &
+                                 'low', 'minimal' /
 
         CHARACTER(len=80) :: restart_mode = 'restart'
           ! specify how to start/restart the simulation
@@ -352,6 +352,9 @@ MODULE input_parameters
           ! if .true. use symmetry only to symmetrize k points
         LOGICAL :: force_symmorphic = .false.
           ! if .true. disable fractionary translations (nonsymmorphic groups)
+        LOGICAL :: use_all_frac = .false.
+          ! if .true. enable usage of all fractionary translations, 
+          ! disabling check if they are commensurate with FFT grid
 
         REAL(DP) :: ecfixed = 0.0_DP, qcutz = 0.0_DP, q2sigma = 0.0_DP
           ! parameters for modified kinetic energy functional to be used
@@ -369,9 +372,8 @@ MODULE input_parameters
           ! Use DFT+U method - following are the needed parameters
         INTEGER, PARAMETER :: nspinx=2
         REAL(DP) :: starting_ns_eigenvalue(lqmax,nspinx,nsx) = -1.0_DP
-        REAL(DP) :: Hubbard_U(nsx,0:lmaxx,0:lmaxx) = 0.0_DP
-        REAL(DP) :: Hubbard_alpha(nsx,0:lmaxx) = 0.0_DP
-        REAL(DP) :: Hubbard_beta(nsx,0:lmaxx) = 0.0_DP
+        REAL(DP) :: hubbard_u(nsx) = 0.0_DP
+        REAL(DP) :: hubbard_alpha(nsx) = 0.0_DP
         CHARACTER(len=80) :: U_projection_type = 'atomic'
 
         LOGICAL :: la2F = .false.
@@ -482,11 +484,10 @@ MODULE input_parameters
 
         NAMELIST / system / ibrav, celldm, a, b, c, cosab, cosac, cosbc, nat, &
              ntyp, nbnd, ecutwfc, ecutrho, nr1, nr2, nr3, nr1s, nr2s,  &
-             nr3s, nr1b, nr2b, nr3b, nosym, nosym_evc, noinv,                 &
+             nr3s, nr1b, nr2b, nr3b, nosym, nosym_evc, noinv, use_all_frac,   &
              force_symmorphic, starting_magnetization,                        &
              occupations, degauss, nspin, ecfixed,              &
              qcutz, q2sigma, lda_plus_U, Hubbard_U, Hubbard_alpha,            &
-             Hubbard_beta,                                                    &
              edir, emaxpos, eopreg, eamp, smearing, starting_ns_eigenvalue,   &
              U_projection_type, input_dft, la2F, assume_isolated,             &
 #if defined (EXX)
@@ -1397,7 +1398,7 @@ MODULE input_parameters
 !
 ! ...   k-points inputs
         LOGICAL :: tk_inp = .false.
-        REAL(DP) :: xk(3,npk) = 0.0_DP, wk(npk) = 0.0_DP
+        REAL(DP), ALLOCATABLE :: xk(:,:), wk(:)
         INTEGER :: nkstot = 0, nk1 = 0, nk2 = 0, nk3 = 0, k1 = 0, k2 = 0, k3 = 0
         CHARACTER(len=80) :: k_points = 'gamma'
           ! k_points = 'automatic' | 'crystal' | 'tpiba' | 'gamma'*
@@ -1446,7 +1447,6 @@ MODULE input_parameters
 !    CELL_PARAMETERS
 !
        REAL(DP) :: rd_ht(3,3) = 0.0_DP
-       CHARACTER(len=80) :: cell_symmetry = 'none'
        CHARACTER(len=80) :: cell_units = 'alat'
        LOGICAL   :: trd_ht = .false.
 
@@ -1607,6 +1607,8 @@ CONTAINS
 
   SUBROUTINE deallocate_input_parameters()
     !
+    IF ( allocated( xk ) ) DEALLOCATE( xk )
+    IF ( allocated( wk ) ) DEALLOCATE( wk )
     IF ( allocated( rd_pos ) ) DEALLOCATE( rd_pos )
     IF ( allocated( sp_pos ) ) DEALLOCATE( sp_pos )
     IF ( allocated( if_pos ) ) DEALLOCATE( if_pos )

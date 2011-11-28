@@ -40,8 +40,8 @@ subroutine allocate_phq
   USE units_ph, ONLY : this_pcxpsi_is_on_file, this_dvkb3_is_on_file
   USE dynmat, ONLY : dyn00, dyn, dyn_rec, w2
   USE modes, ONLY : u, ubar, rtau, npert, name_rap_mode, num_rap_mode
-  USE control_ph, ONLY : elph, lgamma
-  USE el_phon, ONLY : el_ph_mat
+  USE control_ph, ONLY :  lgamma
+  USE el_phon, ONLY : el_ph_mat, elph
 
 
   implicit none
@@ -129,6 +129,6 @@ subroutine allocate_phq
   CALL allocate_bec_type ( nkb, nbnd, becp )
 
   if (elph) allocate (el_ph_mat( nbnd, nbnd, nksq, 3*nat))
-  if (lraman) allocate ( ramtns (3, 3, 3, nat) )
+  allocate ( ramtns (3, 3, 3, nat) )
   return
 end subroutine allocate_phq

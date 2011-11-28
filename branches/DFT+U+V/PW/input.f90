@@ -28,7 +28,7 @@ SUBROUTINE iosys()
   USE control_flags, ONLY: adapt_thr, tr2_init, tr2_multi
 #endif
   USE constants,     ONLY : autoev, eV_to_kelvin, pi, rytoev, &
-                            uakbar, amconv, bohr_radius_angs, eps8
+                            ry_kbar, amconv, bohr_radius_angs, eps8
   USE mp_global,     ONLY : npool, nproc_pool
   !
   USE io_global,     ONLY : stdout, ionode, ionode_id
@@ -118,6 +118,8 @@ SUBROUTINE iosys()
                             eps_mode_ => eps_mode,            &
                             solvationrad_ => solvationrad,    &
                             atomicspread_ => atomicspread,    &
+                            ifdtype_ => ifdtype,              &
+                            nfdpoint_ => nfdpoint,            &
                             mixrhopol_ => mixrhopol,          &
                             tolrhopol_ => tolrhopol,          &
                             gamma_ => gamma,                  &
@@ -260,6 +262,7 @@ SUBROUTINE iosys()
   USE input_parameters, ONLY : verbose, solvent_thr,                          &
                                stype, rhozero, rhomin, tbeta,                 &
                                epsinfty, eps_mode, solvationrad, atomicspread,&
+                               ifdtype, nfdpoint,                             &
                                mixrhopol, tolrhopol,                          &
                                gamma, delta,                                  &
                                extpressure 
@@ -1199,6 +1202,10 @@ SUBROUTINE iosys()
   solvationrad_( 1:ntyp ) = solvationrad( 1:ntyp )
   ALLOCATE( atomicspread_( ntyp ) )
   atomicspread_( 1:ntyp ) = atomicspread( 1:ntyp )
+  !
+  ifdtype_ = ifdtype
+  nfdpoint_ = nfdpoint
+  !
   mixrhopol_ = mixrhopol
   tolrhopol_ = tolrhopol
   !
@@ -1295,8 +1302,6 @@ SUBROUTINE iosys()
   !
   CALL init_start_k ( nk1, nk2, nk3, k1, k2, k3, k_points, nkstot, xk, wk )
   gamma_only = ( k_points == 'gamma' )
-  IF ( tfixed_occ .AND. (nkstot > 1 .OR. ( nk1 * nk2 * nk3 ) > 1 ) ) &
-     CALL errore( 'input', 'only one k point with fixed occupations', 1 )
   !
   CALL convert_tau ( tau_format, nat_, tau)
   !
@@ -1331,7 +1336,7 @@ SUBROUTINE iosys()
   !
   ! ... unit conversion for pressure
   !
-  press_ = press_ / uakbar
+  press_ = press_ / ry_kbar
   !
   ! ... set constraints for cell dynamics/optimization
   !

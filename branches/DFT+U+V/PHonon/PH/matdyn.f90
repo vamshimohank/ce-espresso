@@ -1749,7 +1749,7 @@ SUBROUTINE gen_qpoints (ibrav, at_, bg_, nat, tau, ityp, nk1, nk2, nk3, &
   REAL(DP) :: q(3,nqx)
   ! local
   REAL(DP) :: xqq(3), wk(nqx), mdum(3,nat)
-  LOGICAL :: skip_equivalence=.FALSE.
+  LOGICAL :: magnetic_sym=.FALSE., skip_equivalence=.FALSE.
   !
   time_reversal = .true.
   t_rev(:) = 0
@@ -1763,8 +1763,8 @@ SUBROUTINE gen_qpoints (ibrav, at_, bg_, nat, tau, ityp, nk1, nk2, nk3, &
   !
   CALL find_sym ( nat, tau, ityp, 6, 6, 6, .not.time_reversal, mdum )
   !
-  CALL irreducible_BZ (nrot, s, nsym, time_reversal, at, bg, nqx, nq, q, wk, &
-                       t_rev)
+  CALL irreducible_BZ (nrot, s, nsym, time_reversal, magnetic_sym, &
+                       at, bg, nqx, nq, q, wk, t_rev)
   !
   IF (ntetra /= 6 * nk1 * nk2 * nk3) &
        CALL errore ('gen_qpoints','inconsistent ntetra',1)
@@ -2147,7 +2147,7 @@ function dos_gam (nbndx, nq, jbnd, ntetra, tetra, gamma, et, ef)
         f41 = 1.0_dp - f14
 
         G  =  3.0_dp * f21 * f31 * f41 / (ef-e1)
-        P1 =  o13 * (f12 + f12 + f14)
+        P1 =  o13 * (f12 + f13 + f14)
         P2 =  o13 * f21
         P3 =  o13 * f31
         P4 =  o13 * f41

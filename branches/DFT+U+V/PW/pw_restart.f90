@@ -633,6 +633,8 @@ MODULE pw_restart
       ENDDO k_points_loop1
       !
       !
+      IF (.NOT.lkpoint_dir.AND.ionode) CALL iotk_close_write( iunout )
+      !
       DEALLOCATE ( raux )
       ! 
       ! 
@@ -694,8 +696,6 @@ MODULE pw_restart
          CALL iotk_write_end( iunpun, "EIGENVECTORS" )
          !
          CALL iotk_close_write( iunpun )
-         !
-         IF (.NOT.lkpoint_dir) CALL iotk_close_write( iunout )
          !
          CALL delete_if_present( TRIM( dirname ) // '/' // TRIM( xmlpun ) // '.bck' )
          !
@@ -1745,7 +1745,7 @@ MODULE pw_restart
             s(3,3,nsym) = 1
             sr(:,:,nsym) = DBLE(s(:,:,nsym))
             ftau(:,nsym)= 0
-            ft  (:,nsym)= 0
+            ft  (:,nsym)= 0.0_DP
             sname(nsym) = 'identity'
             do i = 1, SIZE( irt, 2 )
                irt(nsym,i) = i
@@ -1829,6 +1829,7 @@ MODULE pw_restart
       CALL mp_bcast( no_t_rev,  ionode_id, intra_image_comm )
       CALL mp_bcast( s,      ionode_id, intra_image_comm )
       CALL mp_bcast( ftau,   ionode_id, intra_image_comm )
+      CALL mp_bcast( ft,     ionode_id, intra_image_comm )
       CALL mp_bcast( sname,  ionode_id, intra_image_comm )
       CALL mp_bcast( irt,    ionode_id, intra_image_comm )
       CALL mp_bcast( t_rev,  ionode_id, intra_image_comm )

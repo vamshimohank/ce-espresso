@@ -493,7 +493,15 @@ SUBROUTINE setup()
      CALL find_sym ( nat, tau, ityp, dfftp%nr1, dfftp%nr2, dfftp%nr3, &
                   magnetic_sym, m_loc )
      !
-  ENDIF
+     ! ... Input k-points are assumed to be  given in the IBZ of the Bravais
+     ! ... lattice, with the full point symmetry of the lattice.
+     ! ... If some symmetries of the lattice are missing in the crystal,
+     ! ... "irreducible_BZ" computes the missing k-points.
+     !
+     IF ( .NOT. lbands ) CALL irreducible_BZ (nrot, s, nsym, time_reversal, &
+                            magnetic_sym, at, bg, npk, nkstot, xk, wk, t_rev)
+     !
+  END IF
   !
   ! ... if dynamics is done the system should have no symmetries
   ! ... (inversion symmetry alone is allowed)
@@ -502,26 +510,12 @@ SUBROUTINE setup()
            .AND. .NOT. ( calc == 'mm' .OR. calc == 'nm' ) ) &
        CALL infomsg( 'setup', 'Dynamics, you should have no symmetries' )
   !
-  IF ( nat > 0 ) THEN
-     !
-     ! ... Input k-points are assumed to be  given in the IBZ of the Bravais
-     ! ... lattice, with the full point symmetry of the lattice.
-     ! ... If some symmetries of the lattice are missing in the crystal,
-     ! ... "irreducible_BZ" computes the missing k-points.
-     !
-     CALL irreducible_BZ (nrot, s, nsym, time_reversal, at, bg, npk, &
-                          nkstot, xk, wk, t_rev)
-     !
-  END IF
-  !
   ntetra = 0
   !
   IF ( lbands ) THEN
      !
-     ! ... if calculating bands, we leave k-points unchanged and read the
-     ! Fermi energy
+     ! ... if calculating bands, we read the Fermi energy
      !
-     nkstot = nks_start
      CALL pw_readfile( 'reset', ierr )
      CALL pw_readfile( 'ef',   ierr )
      CALL errore( 'setup ', 'problem reading ef from file ' // &
@@ -563,6 +557,7 @@ SUBROUTINE setup()
      !
      if (nspin /= 4) call errore ('setup','nspin should be 4; check iosys',1)
      current_spin = 1
+     isk(:) = 1
      !
   ELSE
      !
@@ -570,6 +565,7 @@ SUBROUTINE setup()
      !
      wk(1:nkstot)    = wk(1:nkstot) * degspin
      current_spin = 1
+     isk(:) = 1
      !
      IF ( nspin /= 1 ) &
         CALL errore( 'setup', 'nspin should be 1; check iosys', 1 )
@@ -604,9 +600,32 @@ SUBROUTINE setup()
   !
   IF ( lda_plus_u ) THEN
      !
+     Hubbard_lmax = -1
+     ! Set the default of Hubbard_l for the species which have
+     ! Hubbard_U=0 (in that case set_Hubbard_l will not be called)
+     Hubbard_l(:) = -1 
+     !
+     DO nt = 1, ntyp
+        !
+        IF ( Hubbard_U(nt) /= 0.D0 .OR. Hubbard_alpha(nt) /= 0.D0 ) THEN
+           !
+           Hubbard_l(nt) = set_Hubbard_l( upf(nt)%psd )
+           Hubbard_lmax = MAX( Hubbard_lmax, Hubbard_l(nt) )
+           !
+        END IF
+        !
+     END DO
+     !
+     IF ( Hubbard_lmax == -1 ) CALL errore( 'setup', &
+                   & 'lda_plus_u calculation but Hubbard_l not set', 1 )
+     !
      ! compute index of atomic wfcs used as projectors
      ALLOCATE ( oatwfc(nat,0:lmaxx) )
      CALL offset_atom_wfc ( nat, oatwfc )
+     !
+  ELSE
+     !
+     Hubbard_lmax = 0
      !
   END IF
   !

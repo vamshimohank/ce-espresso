@@ -491,7 +491,7 @@ MODULE input_parameters
              edir, emaxpos, eopreg, eamp, smearing, starting_ns_eigenvalue,   &
              U_projection_type, input_dft, la2F, assume_isolated,             &
 #if defined (EXX)
-             x_gamma_extrapolation, nqx1, nqx2, nqx3,                         &
+             nqx1, nqx2, nqx3,                         &
              exxdiv_treatment, x_gamma_extrapolation, yukawa, ecutvcut,       &
              exx_fraction, screening_parameter,                               &
 #endif
@@ -557,6 +557,16 @@ MODULE input_parameters
         REAL(DP) :: atomicspread(nsx) = 0.5D0
         ! gaussian spreads of the atomic density of charge
 !
+! Numerical differentiators paramters
+!
+        INTEGER  :: ifdtype = 1 
+        ! type of numerical differentiator: 1=central differences, 
+        ! 2=low-noise lanczos (m=2), 3=low-noise lanczos (m=4), 
+        ! 4=smooth noise-robust (n=2), 5=smooth noise-robust (n=4)
+        INTEGER  :: nfdpoint = 1
+        ! number of points used in the numerical differentiator 
+        ! N = 2*nfdpoint+1
+!
 ! Iterative solver parameters
 !
         REAL(DP) :: mixrhopol = 0.5D0
@@ -580,6 +590,7 @@ MODULE input_parameters
              verbose, solvent_thr,                                     &
              stype, rhozero, rhomin, tbeta,                            &
              epsinfty, eps_mode, solvationrad, atomicspread,           &
+             ifdtype, nfdpoint,                                        &
              mixrhopol, tolrhopol,                                     &
              gamma, delta,                                             &
              extpressure

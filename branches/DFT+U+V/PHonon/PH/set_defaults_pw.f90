@@ -41,7 +41,7 @@ SUBROUTINE setup_nscf ( newgrid, xq )
   USE wvfct,              ONLY : nbnd, nbndx
   USE control_flags,      ONLY : ethr, isolve, david, &
                                  noinv, modenum, use_para_diag
-  USE control_ph,         ONLY : elph_mat
+  USE el_phon,            ONLY : elph_mat
   USE mp_global,          ONLY : kunit
   USE spin_orb,           ONLY : domag
   USE noncollin_module,   ONLY : noncolin
@@ -150,8 +150,8 @@ SUBROUTINE setup_nscf ( newgrid, xq )
   ! ... "irreducible_BZ" computes the missing k-points.
   !
   if(.not.elph_mat) &
-  CALL irreducible_BZ (nrot, s, nsymq, minus_q, at, bg, npk, nkstot, xk, wk, &
-                       t_rev)
+  CALL irreducible_BZ (nrot, s, nsymq, minus_q, magnetic_sym, &
+                       at, bg, npk, nkstot, xk, wk, t_rev)
   !
   ! ... add k+q to the list of k
   !

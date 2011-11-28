@@ -72,6 +72,7 @@ SUBROUTINE extract (filplot,plot_num)
   USE noncollin_module, ONLY : i_cons
   USE paw_variables, ONLY : okpaw
   USE mp,        ONLY : mp_bcast
+  USE constants, ONLY : rytoev
 
   IMPLICIT NONE
   !
@@ -165,20 +166,15 @@ SUBROUTINE extract (filplot,plot_num)
 
   needwf=(plot_num==3).or.(plot_num==4).or.(plot_num==5).or.(plot_num==7).or. &
          (plot_num==8).or.(plot_num==10)
-  IF (nproc /= nproc_file .and. .not. twfcollect .and. needwf)  &
-     CALL errore('postproc',&
-     'pw.x run with a different number of processors. Use wf_collect=.true.',1)
 
   IF (nproc_pool /= nproc_pool_file .and. .not. twfcollect .and. needwf)  &
      CALL errore('postproc',&
-     'pw.x run with a different number of pools. Use wf_collect=.true.',1)
+     'pw.x run with a different number of procs/pools. Use wf_collect=.true.',1)
 
   IF ( ( two_fermi_energies .or. i_cons /= 0) .and. &
        ( plot_num==3 .or. plot_num==4 .or. plot_num==5 ) ) &
      CALL errore('postproc',&
      'Post-processing with constrained magnetization is not available yet',1)
-!   IF (okpaw) CALL errore('postproc', &
-!              'post-processing paw routines not yet tested',1)
 
   CALL openfil_pp ( )
   CALL struc_fact (nat, tau, ntyp, ityp, ngm, g, bg, dfftp%nr1, dfftp%nr2, dfftp%nr3, &
@@ -190,8 +186,8 @@ SUBROUTINE extract (filplot,plot_num)
   !
   IF (emax == +999.0d0) emax = ef
   IF (plot_num == 10) THEN
-     emin = emin / 13.6058d0
-     emax = emax / 13.6058d0
+     emin = emin / rytoev
+     emax = emax / rytoev
   ENDIF
   !
   !

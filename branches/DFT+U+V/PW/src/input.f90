@@ -483,6 +483,8 @@ SUBROUTINE iosys()
      !
   END SELECT
   !
+  lstres = lmovecell .OR. ( tstress .and. lscf )
+  !
   IF ( tefield .and. ( .not. nosym ) ) THEN
      nosym = .true.
      WRITE( stdout, &
@@ -541,10 +543,15 @@ SUBROUTINE iosys()
   CASE( 'tetrahedra' )
      !
      ! replace "errore" with "infomsg" in the next line if you really want
-     ! to perform a calculation with forces using tetrahedra
+     ! to perform a calculation with forces using tetrahedra 
      !
      IF( lforce ) CALL errore( 'iosys', &
         'force calculation with tetrahedra not recommanded: use smearing',1)
+     !
+     ! as above, for stress
+     !
+     IF( lstres ) CALL errore( 'iosys', &
+        'stress calculation with tetrahedra not recommanded: use smearing',1)
      ngauss = 0
      ltetra = .true.
      !
@@ -840,8 +847,11 @@ SUBROUTINE iosys()
      !
      CALL infomsg( 'iosys', 'wrong startingpot: use default (1)' )
      !
-     IF (       lscf ) startingpot = 'atomic'
-     IF ( .not. lscf ) startingpot = 'file'
+     IF ( lscf ) THEN
+        startingpot = 'atomic'
+     ELSE 
+        startingpot = 'file'
+     END IF
      !
   ENDIF
   !
@@ -1056,7 +1066,6 @@ SUBROUTINE iosys()
   END SELECT
   !
   tmp_dir = trimcheck ( outdir )
-  lstres = ( tstress .and. lscf )
   !
   IF ( lberry .and. npool > 1 ) &
      CALL errore( 'iosys', 'Berry Phase not implemented with pools', 1 )
@@ -1376,8 +1385,6 @@ SUBROUTINE iosys()
      !
      at_old    = at
      omega_old = omega
-     lstres    = .true.
-     !
      IF ( cell_factor_ <= 0.D0 ) cell_factor_ = 1.2D0
      !
      IF ( cmass <= 0.D0 ) &

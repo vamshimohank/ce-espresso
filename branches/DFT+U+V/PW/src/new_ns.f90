@@ -1,5 +1,5 @@
 !
-! Copyright (C) 2001-2007 Quantum ESPRESSO group
+! Copyright (C) 2001-2012 Quantum ESPRESSO group
 ! This file is distributed under the terms of the
 ! GNU General Public License. See the file `License'
 ! in the root directory of the present distribution,
@@ -28,34 +28,35 @@ SUBROUTINE new_ns(ns)
   USE wvfct,                ONLY : nbnd, npw, npwx, igk, wg
   USE control_flags,        ONLY : gamma_only
   USE wavefunctions_module, ONLY : evc
-  USE gvect,                ONLY : gstart
   USE io_files,             ONLY : iunigk, nwordwfc, iunwfc, nwordatwfc, iunsat
   USE buffers,              ONLY : get_buffer
   USE mp_global,            ONLY : intra_pool_comm, inter_pool_comm
   USE mp,                   ONLY : mp_sum
+  USE becmod,               ONLY : bec_type, calbec, &
+                                   allocate_bec_type, deallocate_bec_type
 
   IMPLICIT NONE
   !
-  ! I/O variables
+  REAL(DP), INTENT(OUT) :: ns((lmaxx+1)**2,(lmaxx+1)**2,nspin,nat)
   !
-  REAL(DP) :: ns((lmaxx+1)**2,(lmaxx+1)**2,nspin,nat)
-
-  INTEGER :: ik, ibnd, is, i, na, nb, nt, isym, m1, m2, &
-       m0, m00, ldim, il, ilm1, ilm2
+  TYPE (bec_type) :: proj     ! proj(natomwfc,nbnd)
+  INTEGER :: ik, ibnd, is, i, na, nb, nt, isym, m1, m2, m0, m00, ldim
   ! counter on k points
   !    "    "  bands
   !    "    "  spins
   ! in the natomwfc ordering
   REAL(DP) , ALLOCATABLE :: nr (:,:,:,:)
-
+  REAL(DP) :: psum
   REAL(DP), EXTERNAL :: ddot
   COMPLEX(DP) :: zdotc
   COMPLEX(DP) , ALLOCATABLE :: proj(:,:)
 
-  REAL(DP) :: psum
-
+  CALL start_clock('new_ns')
   ldim = (lmaxx+1)**2
-  ALLOCATE( proj(natomwfc,nbnd), nr(ldim,ldim,nspin,nat) )
+  ALLOCATE( nr(ldim,ldim,nspin,nat) )
+  ldim = 2 * Hubbard_lmax + 1
+  ALLOCATE( nr(ldim,ldim,nspin,nat) )  
+  CALL allocate_bec_type ( natomwfc, nbnd, proj ) 
   !
   ! D_Sl for l=1, l=2 and l=3 are already initialized, for l=0 D_S0 is 1
   !
@@ -66,9 +67,7 @@ SUBROUTINE new_ns(ns)
   !
   !    we start a loop on k points
   !
-
   IF (nks > 1) REWIND (iunigk)
-
   DO ik = 1, nks
      current_spin = 1
      IF (lsda) current_spin = isk(ik)
@@ -81,23 +80,7 @@ SUBROUTINE new_ns(ns)
      !
      ! make the projection
      !
-        DO ibnd = 1, nbnd
-           DO i = 1, natomwfc
-              IF ( gamma_only ) THEN 
-                 proj (i, ibnd) = 2.d0 * &
-                      ddot(2*npw, swfcatom (1, i), 1, evc (1, ibnd), 1) 
-                 IF (gstart.EQ.2) proj (i, ibnd) = proj (i, ibnd) - &
-                      swfcatom (1, i) * evc (1, ibnd)
-              ELSE 
-                 proj (i, ibnd) = zdotc (npw, swfcatom (1, i), 1, evc (1, ibnd), 1)
-              ENDIF
-           ENDDO
-        ENDDO
-
-#ifdef __PARA
-        CALL mp_sum ( proj, intra_pool_comm )
-#endif
-
+     CALL calbec ( npw, swfcatom, evc, proj )
      !
      ! compute the occupation numbers (the quantities n(m1,m2)) of the
      ! atomic orbitals
@@ -109,9 +92,19 @@ SUBROUTINE new_ns(ns)
             DO m2 = m1, 2*il+1
               ilm1 = ilm(il,m1)
               ilm2 = ilm(il,m2)
-              DO ibnd = 1, nbnd  
-                nr(ilm1,ilm2,current_spin,na) = nr(ilm1,ilm2,current_spin,na) + &
-                  wg(ibnd,ik) * DBLE( proj(oatwfc(na,il)+m2,ibnd) * CONJG(proj(oatwfc(na,il)+m1,ibnd)) )
+              IF ( gamma_only ) THEN
+                DO ibnd = 1, nbnd  
+                  nr(ilm1,ilm2,current_spin,na) = nr(ilm1,ilm2,current_spin,na) + &
+                    proj%r(oatwfc(na,il)+m2,ibnd) * &
+                    proj%r(oatwfc(na,il)+m1,ibnd) * wg(ibnd,ik)
+                ENDDO
+              ELSE
+                DO ibnd = 1, nbnd  
+                  nr(ilm1,ilm2,current_spin,na) = nr(ilm1,ilm2,current_spin,na) + &
+                    DBLE( proj%k(oatwfc(na,il)+m2,ibnd)) * &
+                    CONJG(proj%k(oatwfc(na,il)+m1,ibnd)) * wg(ibnd,ik
+                ENDDO
+              ENDIF
               ENDDO
             ENDDO
           ENDDO
@@ -120,6 +113,7 @@ SUBROUTINE new_ns(ns)
 
 ! on k-points
   ENDDO
+  CALL deallocate_bec_type (proj) 
 #ifdef __PARA
   CALL mp_sum( nr, inter_pool_comm )
 #endif
@@ -207,7 +201,8 @@ SUBROUTINE new_ns(ns)
     ENDDO
   ENDDO
 
-  DEALLOCATE ( proj, nr )
+  DEALLOCATE ( nr )
+  CALL stop_clock('new_ns')
 
   RETURN
 

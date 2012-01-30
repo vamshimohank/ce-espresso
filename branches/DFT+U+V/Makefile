@@ -23,8 +23,8 @@ default :
 	@echo '  ld1          utilities for pseudopotential generation'
 	@echo '  upf          utilities for pseudopotential conversion'
 	@echo '  xspectra     X-ray core-hole spectroscopy calculations '
-	@echo '  pwall        same as "make pw ph pp pwcond"'
-	@echo '  all          same as "make pwall cp ld1 upf tddfpt"'
+	@echo '  pwall        same as "make pw ph pp pwcond neb"'
+	@echo '  all          same as "make pwall cp ld1 upf gww tddfpt"'
 	@echo '  clean        remove executables and objects'
 	@echo '  veryclean    revert distribution to the original status'
 	@echo '  tar          create a tarball of the source tree'
@@ -225,7 +225,7 @@ distclean veryclean : clean
 	- cd examples ; ./make_clean
 	- cd PHonon/examples ; ./make_clean
 	- cd atomic_doc ; ./make_clean
-	- for dir in Doc doc-def; do \
+	- for dir in Doc; do \
 	    test -d $$dir && ( cd $$dir ; $(MAKE) $(MFLAGS) TLDEPS= clean ) \
 	done
 	- test -d GUI && ( cd GUI ;  $(MAKE) $(MFLAGS) TLDEPS= veryclean )
@@ -264,9 +264,9 @@ doc :
 	if test -d Doc ; then \
 	( cd Doc ; if test "$(MAKE)" = "" ; then make $(MFLAGS) TLDEPS= all ; \
 	else $(MAKE) $(MFLAGS) TLDEPS= all ; fi ) ; fi
-	if test -d doc-def ; then \
-	( cd doc-def ; if test "$(MAKE)" = "" ; then make $(MFLAGS) TLDEPS= all ; \
-	else $(MAKE) $(MFLAGS) TLDEPS= all ; fi ) ; fi
+	for dir in */Doc; do \
+	( if test -f $$dir/Makefile ; then cd $$dir; if test "$(MAKE)" = "" ; then make $(MFLAGS) TLDEPS= all ; \
+	else $(MAKE) $(MFLAGS) TLDEPS= all ; fi  ; fi ); done
 
 depend:
 	@echo 'Checking dependencies...'

@@ -529,12 +529,6 @@ SUBROUTINE setup()
      !
   END IF
   !
-#if defined (EXX)
-  IF ( dft_is_hybrid() ) THEN
-     CALL exx_grid_init()
-     CALL exx_div_check()
-  ENDIF
-#endif
   !
   IF ( lsda ) THEN
      !
@@ -580,6 +574,13 @@ SUBROUTINE setup()
   !
   nks = nkstot
   !
+#endif
+
+#if defined (EXX)
+  IF ( dft_is_hybrid() ) THEN
+     CALL exx_grid_init()
+     CALL exx_div_check()
+  ENDIF
 #endif
   IF (one_atom_occupations) THEN
      DO ik=1,nkstot

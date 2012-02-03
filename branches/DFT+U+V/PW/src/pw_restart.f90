@@ -112,11 +112,9 @@ MODULE pw_restart
                                        nproc_image, nproc_bgrp, me_bgrp, &
                                        root_pool, intra_pool_comm, inter_pool_comm, intra_image_comm, &
                                        root_bgrp, intra_bgrp_comm, inter_bgrp_comm, nbgrp
-#ifdef EXX
       USE funct,                ONLY : get_exx_fraction, get_screening_parameter, exx_is_active
       USE exx,                  ONLY : x_gamma_extrapolation, nq1, nq2, nq3, &
                                        exxdiv_treatment, yukawa, ecutvcut
-#endif
       USE cellmd,               ONLY : lmovecell, cell_factor 
       !
       USE martyna_tuckerman, ONLY: do_comp_mt
@@ -401,12 +399,10 @@ MODULE pw_restart
                         HUBBARD_BETA = Hubbard_beta, &
                         INLC = inlc, VDW_TABLE_NAME = vdw_table_name, &
                         PSEUDO_DIR = pseudo_dir, DIRNAME = dirname)
-#ifdef EXX
          CALL write_exx( x_gamma_extrapolation, nq1, nq2, nq3, &
                          exxdiv_treatment, yukawa, ecutvcut, &
                          get_exx_fraction(), &
                          get_screening_parameter(), exx_is_active() )
-#endif
          !
 !-------------------------------------------------------------------------------
 ! ... OCCUPATIONS
@@ -1102,11 +1098,9 @@ MODULE pw_restart
          !
          CALL read_ef( dirname, ierr )
          RETURN
-#ifdef EXX
       CASE( 'exx' )
          CALL read_exx(dirname, ierr)
          RETURN
-#endif 
          !
       END SELECT
       !
@@ -3278,7 +3272,6 @@ MODULE pw_restart
       !
     END SUBROUTINE read_ef
     !
-#ifdef EXX
     !------------------------------------------------------------------------
     SUBROUTINE read_exx( dirname, ierr )
       !------------------------------------------------------------------------
@@ -3340,8 +3333,6 @@ MODULE pw_restart
       !
     END SUBROUTINE read_exx
     !
-    !----------------------------------------------------------------------------
-#endif
     !------------------------------------------------------------------------
     SUBROUTINE read_( dirname, ierr )
       !------------------------------------------------------------------------

@@ -50,10 +50,7 @@ MODULE xml_io_base
             write_header, write_control, write_moving_cell,              &
             write_cell, write_ions, write_symmetry, write_planewaves,    &
             write_efield, write_spin, write_magnetization, write_xc,     &
-#ifdef EXX
-            write_exx,                                                   &
-#endif
-            write_occ, write_bz, write_para,    &
+            write_exx, write_occ, write_bz, write_para,                  &
             write_phonon, write_rho_xml, write_wfc, write_eig,           &
             read_wfc, read_rho_xml
   !
@@ -1281,7 +1278,6 @@ MODULE xml_io_base
       !
     END SUBROUTINE write_xc
 
-#ifdef EXX
     !------------------------------------------------------------------------
     SUBROUTINE write_exx( x_gamma_extrapolation, nqx1, nqx2, nqx3, &
                           exxdiv_treatment, yukawa, ecutvcut, exx_fraction, &
@@ -1307,7 +1303,6 @@ MODULE xml_io_base
       call iotk_write_dat(iunpun, "exx_is_active", exx_is_active)
       CALL iotk_write_end(iunpun, "EXACT_EXCHANGE" )
     END SUBROUTINE write_exx
-#endif
     !
     !------------------------------------------------------------------------
     SUBROUTINE write_occ( lgauss, ngauss, degauss, ltetra, ntetra, &

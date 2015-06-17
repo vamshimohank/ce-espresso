@@ -163,3 +163,101 @@ SUBROUTINE make_pointlists
  
 END SUBROUTINE make_pointlists
 
+
+MODULE pointlist_sphere
+  USE kinds, ONLY : DP
+  SAVE
+
+  ! the weight of each point in real space
+  REAL(DP), ALLOCATABLE :: factlist(:)
+
+  ! center of the sphere in cartesian coordinates in units of alat
+  REAL(DP), parameter :: center(3) = (/ 0.5d0, 0.5d0, 0.5d0 /)
+
+  ! sphere radius in bohr
+  REAL(DP), parameter :: radius = 160.d0
+
+  ! is this module active or not?
+  LOGICAL, parameter :: active = .false.
+
+END MODULE pointlist_sphere
+
+
+!--------------------------------------------------------------------------
+SUBROUTINE make_pointlists_sphere
+  !--------------------------------------------------------------------------
+  !
+  ! This initialization is needed in order to apply XC only inside
+  ! a given sphere
+  !
+  USE kinds,      ONLY : dp
+  USE io_global,  ONLY : stdout
+  USE cell_base,  ONLY : at, bg, alat
+  USE mp_bands,   ONLY : me_bgrp
+  USE fft_base,   ONLY : dfftp
+  USE pointlist_sphere
+  !
+  IMPLICIT NONE
+  !
+  INTEGER idx0,idx,indproc,ir
+  INTEGER i,j,k,i0,j0,k0,ipol,nt,nt1
+  REAL(DP) :: posi(3), distance
+
+  WRITE( stdout,'(5x,"Generating pointlists (sphere) ...")')
+  WRITE(stdout,'(5X,"sphere center:",3(F8.4,2X),"radius:",F12.4)') center, radius
+
+  ! First, the real-space position of every point ir is needed ...
+  ! In the parallel case, find the index-offset to account for the planes
+  ! treated by other procs
+#if defined (__MPI)
+      idx0 = dfftp%nr1x*dfftp%nr2x * dfftp%ipp(me_bgrp+1)
+#else
+      idx0 = 0
+#endif
+
+  allocate(factlist(dfftp%nnr))
+  factlist(:) = 0.d0
+
+  if (.not. active) then
+      factlist(:) = 1.d0
+      return
+  endif
+
+  do ir=1, dfftp%nr1x*dfftp%nr2x * dfftp%npl
+
+     idx = idx0 + ir - 1
+     k0  = idx/(dfftp%nr1x*dfftp%nr2x)
+     idx = idx - (dfftp%nr1x*dfftp%nr2x) * k0
+     j0  = idx / dfftp%nr1x
+     idx = idx - dfftp%nr1x*j0
+     i0  = idx
+
+     do i = i0-dfftp%nr1,i0+dfftp%nr1, dfftp%nr1
+        do j = j0-dfftp%nr2, j0+dfftp%nr2, dfftp%nr2
+           do k = k0-dfftp%nr3, k0+dfftp%nr3, dfftp%nr3
+              do ipol=1,3
+                 posi(ipol) =  DBLE(i)/DBLE(dfftp%nr1) * at(ipol,1) &
+                             + DBLE(j)/DBLE(dfftp%nr2) * at(ipol,2) &
+                             + DBLE(k)/DBLE(dfftp%nr3) * at(ipol,3)
+              enddo
+
+              distance = SQRT( (posi(1)-center(1))**2 + &
+                               (posi(2)-center(2))**2 + &
+                               (posi(3)-center(3)**2) ) * alat
+
+              if (distance <= radius) then
+                  factlist(ir) = 1.d0
+                  goto 10
+              else if (distance <= 1.2*radius) then
+                  factlist(ir) = 1.d0 - (distance - radius)/(0.2d0*radius)
+                  goto 10
+              endif
+
+           enddo         ! k
+        enddo            ! j
+     enddo               ! i
+  10 continue
+  enddo                  ! ir
+ 
+END SUBROUTINE make_pointlists_sphere
+

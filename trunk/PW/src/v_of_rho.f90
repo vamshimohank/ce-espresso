@@ -371,6 +371,7 @@ SUBROUTINE v_xc( rho, rho_core, rhog_core, etxc, vtxc, v )
   USE mp_bands,         ONLY : intra_bgrp_comm
   USE mp,               ONLY : mp_sum
   USE input_parameters, ONLY : x_factor, c_factor
+  USE pointlist_sphere
 
   !
   IMPLICIT NONE
@@ -428,9 +429,9 @@ SUBROUTINE v_xc( rho, rho_core, rhog_core, etxc, vtxc, v )
            !
            CALL xc( arhox, ex, ec, vx(1), vc(1) )
            !
-           v(ir,1) = e2*( vx(1)*x_factor + vc(1)*c_factor )
+           v(ir,1) = e2*( vx(1)*x_factor + vc(1)*c_factor ) * factlist(ir)
            !
-           etxc = etxc + e2*( ex*x_factor + ec*c_factor ) * rhox
+           etxc = etxc + e2*( ex*x_factor + ec*c_factor ) * rhox * factlist(ir)
            !
            vtxc = vtxc + v(ir,1) * rho%of_r(ir,1)
            !
@@ -473,9 +474,9 @@ SUBROUTINE v_xc( rho, rho_core, rhog_core, etxc, vtxc, v )
            !
            CALL xc_spin( arhox, zeta, ex, ec, vx(1), vx(2), vc(1), vc(2) )
            !
-           v(ir,:) = e2*( vx(:)*x_factor + vc(:)*c_factor )
+           v(ir,:) = e2*( vx(:)*x_factor + vc(:)*c_factor ) * factlist(ir)
            !
-           etxc = etxc + e2*( ex*x_factor + ec*c_factor ) * rhox
+           etxc = etxc + e2*( ex*x_factor + ec*c_factor ) * rhox * factlist(ir)
            !
            vtxc = vtxc + ( v(ir,1)*rho%of_r(ir,1) + v(ir,2)*rho%of_r(ir,2) )
            !

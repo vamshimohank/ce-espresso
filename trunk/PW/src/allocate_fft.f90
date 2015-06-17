@@ -80,6 +80,7 @@ SUBROUTINE allocate_fft
      ALLOCATE(r_loc(nat))
      CALL make_pointlists ( )
   ENDIF
+  CALL make_pointlists_sphere ( )
 
   RETURN
 END SUBROUTINE allocate_fft

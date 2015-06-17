@@ -23,6 +23,7 @@ SUBROUTINE gradcorr( rho, rhog, rho_core, rhog_core, etxc, vtxc, v )
   USE fft_base,             ONLY : dfftp
   USE fft_interfaces,       ONLY : fwfft
   USE input_parameters,     ONLY : x_factor, c_factor
+  USE pointlist_sphere
 
   !
   IMPLICIT NONE
@@ -32,7 +33,7 @@ SUBROUTINE gradcorr( rho, rhog, rho_core, rhog_core, etxc, vtxc, v )
   REAL(DP),    INTENT(INOUT) :: v(dfftp%nnr,nspin)
   REAL(DP),    INTENT(INOUT) :: vtxc, etxc
   !
-  INTEGER :: k, ipol, is, nspin0, ir, jpol
+  INTEGER :: k, ipol, is, nspin0, jpol
   !
   REAL(DP),    ALLOCATABLE :: grho(:,:,:), h(:,:,:), dh(:)
   REAL(DP),    ALLOCATABLE :: rhoout(:,:), segni(:), vgg(:,:), vsave(:,:)
@@ -126,16 +127,16 @@ SUBROUTINE gradcorr( rho, rhog, rho_core, rhog_core, etxc, vtxc, v )
               !
               ! ... first term of the gradient correction : D(rho*Exc)/D(rho)
               !
-              v(k,1) = v(k,1) + e2 * ( v1x*x_factor + v1c*c_factor )
+              v(k,1) = v(k,1) + e2 * ( v1x*x_factor + v1c*c_factor ) * factlist(k)
               !
               ! ... h contains :
               !
               ! ...    D(rho*Exc) / D(|grad rho|) * (grad rho) / |grad rho|
               !
-              h(:,k,1) = e2 * ( v2x*x_factor + v2c*c_factor ) * grho(:,k,1)
+              h(:,k,1) = e2 * ( v2x*x_factor + v2c*c_factor ) * grho(:,k,1) * factlist(k)
               !
-              vtxcgc = vtxcgc+e2*( v1x*x_factor + v1c*c_factor ) * ( rhoout(k,1) - rho_core(k) )
-              etxcgc = etxcgc+e2*( sx*x_factor + sc*c_factor ) * segno
+              vtxcgc = vtxcgc+e2*( v1x*x_factor + v1c*c_factor ) * ( rhoout(k,1) - rho_core(k) ) * factlist(k)
+              etxcgc = etxcgc+e2*( sx*x_factor + sc*c_factor ) * segno * factlist(k)
               !
            ELSE
               h(:,k,1)=0.D0
@@ -214,8 +215,8 @@ SUBROUTINE gradcorr( rho, rhog, rho_core, rhog_core, etxc, vtxc, v )
         !
         ! ... first term of the gradient correction : D(rho*Exc)/D(rho)
         !
-        v(k,1) = v(k,1) + e2 * ( v1xup*x_factor + v1cup*c_factor )
-        v(k,2) = v(k,2) + e2 * ( v1xdw*x_factor + v1cdw*c_factor )
+        v(k,1) = v(k,1) + e2 * ( v1xup*x_factor + v1cup*c_factor ) * factlist(k)
+        v(k,2) = v(k,2) + e2 * ( v1xdw*x_factor + v1cdw*c_factor ) * factlist(k)
         !
         ! ... h contains D(rho*Exc)/D(|grad rho|) * (grad rho) / |grad rho|
         !
@@ -223,16 +224,16 @@ SUBROUTINE gradcorr( rho, rhog, rho_core, rhog_core, etxc, vtxc, v )
            !
            grup = grho(ipol,k,1)
            grdw = grho(ipol,k,2)
-           h(ipol,k,1) = e2 * ( ( v2xup*x_factor + v2cup*c_factor ) * grup + v2cud*c_factor * grdw )
-           h(ipol,k,2) = e2 * ( ( v2xdw*x_factor + v2cdw*c_factor ) * grdw + v2cud*c_factor * grup )
+           h(ipol,k,1) = e2 * ( ( v2xup*x_factor + v2cup*c_factor ) * grup + v2cud*c_factor * grdw ) * factlist(k)
+           h(ipol,k,2) = e2 * ( ( v2xdw*x_factor + v2cdw*c_factor ) * grdw + v2cud*c_factor * grup ) * factlist(k)
            !
         END DO
         !
         vtxcgc = vtxcgc + &
-                 e2 * ( v1xup*x_factor + v1cup*c_factor ) * ( rhoout(k,1) - rho_core(k) * fac )
+                 e2 * ( v1xup*x_factor + v1cup*c_factor ) * ( rhoout(k,1) - rho_core(k) * fac ) * factlist(k)
         vtxcgc = vtxcgc + &
-                 e2 * ( v1xdw*x_factor + v1cdw*c_factor ) * ( rhoout(k,2) - rho_core(k) * fac )
-        etxcgc = etxcgc + e2 * ( sx*x_factor + sc*c_factor )
+                 e2 * ( v1xdw*x_factor + v1cdw*c_factor ) * ( rhoout(k,2) - rho_core(k) * fac ) * factlist(k)
+        etxcgc = etxcgc + e2 * ( sx*x_factor + sc*c_factor ) * factlist(k)
         !
      END DO
 !$omp end parallel do
@@ -256,9 +257,9 @@ SUBROUTINE gradcorr( rho, rhog, rho_core, rhog_core, etxc, vtxc, v )
      !
      CALL grad_dot( dfftp%nnr, h(1,1,is), ngm, g, nl, alat, dh )
      !
-     v(:,is) = v(:,is) - dh(:)
+     v(:,is) = v(:,is) - dh(:) * factlist(:)
      !
-     vtxcgc = vtxcgc - SUM( dh(:) * rhoout(:,is) )
+     vtxcgc = vtxcgc - SUM( dh(:) * rhoout(:,is)  * factlist(:))
      !
   END DO
   !

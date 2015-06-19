@@ -178,7 +178,7 @@ MODULE pointlist_sphere
   REAL(DP), parameter :: radius = 160.d0
 
   ! is this module active or not?
-  LOGICAL, parameter :: active = .false.
+  LOGICAL, parameter :: active = .true.
 
 END MODULE pointlist_sphere
 
@@ -243,7 +243,7 @@ SUBROUTINE make_pointlists_sphere
 
               distance = SQRT( (posi(1)-center(1))**2 + &
                                (posi(2)-center(2))**2 + &
-                               (posi(3)-center(3)**2) ) * alat
+                               (posi(3)-center(3))**2) * alat
 
               if (distance <= radius) then
                   factlist(ir) = 1.d0

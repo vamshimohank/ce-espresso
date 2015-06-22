@@ -173,9 +173,11 @@ MODULE pointlist_sphere
 
   ! center of the sphere in cartesian coordinates in units of alat
   REAL(DP), parameter :: center(3) = (/ 0.5d0, 0.5d0, 0.5d0 /)
+  !!REAL(DP), parameter :: center(3) = (/ 0.35454545, 0.35454545, 0.35454545 /)
 
   ! sphere radius in bohr
-  REAL(DP), parameter :: radius = 160.d0
+  !!REAL(DP), parameter :: radius = 160.d0
+  REAL(DP), parameter :: radius = 2.0d0
 
   ! is this module active or not?
   LOGICAL, parameter :: active = .true.
@@ -204,7 +206,7 @@ SUBROUTINE make_pointlists_sphere
   REAL(DP) :: posi(3), distance
 
   WRITE( stdout,'(5x,"Generating pointlists (sphere) ...")')
-  WRITE(stdout,'(5X,"sphere center:",3(F8.4,2X),"radius:",F12.4)') center, radius
+  WRITE(stdout,'(5X,"sphere center:",3(F8.4,2X),"radius:",F12.4,''  active='',L1)') center, radius, active
 
   ! First, the real-space position of every point ir is needed ...
   ! In the parallel case, find the index-offset to account for the planes
@@ -232,13 +234,13 @@ SUBROUTINE make_pointlists_sphere
      idx = idx - dfftp%nr1x*j0
      i0  = idx
 
-     do i = i0-dfftp%nr1,i0+dfftp%nr1, dfftp%nr1
-        do j = j0-dfftp%nr2, j0+dfftp%nr2, dfftp%nr2
-           do k = k0-dfftp%nr3, k0+dfftp%nr3, dfftp%nr3
+     !do i = i0-dfftp%nr1,i0+dfftp%nr1, dfftp%nr1
+     !   do j = j0-dfftp%nr2, j0+dfftp%nr2, dfftp%nr2
+     !      do k = k0-dfftp%nr3, k0+dfftp%nr3, dfftp%nr3
               do ipol=1,3
-                 posi(ipol) =  DBLE(i)/DBLE(dfftp%nr1) * at(ipol,1) &
-                             + DBLE(j)/DBLE(dfftp%nr2) * at(ipol,2) &
-                             + DBLE(k)/DBLE(dfftp%nr3) * at(ipol,3)
+                 posi(ipol) =  DBLE(i0)/DBLE(dfftp%nr1) * at(ipol,1) &
+                             + DBLE(j0)/DBLE(dfftp%nr2) * at(ipol,2) &
+                             + DBLE(k0)/DBLE(dfftp%nr3) * at(ipol,3)
               enddo
 
               distance = SQRT( (posi(1)-center(1))**2 + &
@@ -247,15 +249,15 @@ SUBROUTINE make_pointlists_sphere
 
               if (distance <= radius) then
                   factlist(ir) = 1.d0
-                  goto 10
+                  !goto 10
               else if (distance <= 1.2*radius) then
                   factlist(ir) = 1.d0 - (distance - radius)/(0.2d0*radius)
-                  goto 10
+                  !goto 10
               endif
 
-           enddo         ! k
-        enddo            ! j
-     enddo               ! i
+     !      enddo         ! k
+     !   enddo            ! j
+     !enddo               ! i
   10 continue
   enddo                  ! ir
  

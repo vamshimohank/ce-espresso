@@ -39,7 +39,7 @@ SUBROUTINE summary()
                               tr2, isolve, lmd, lbfgs, iverbosity, tqr
   USE noncollin_module,ONLY : noncolin
   USE spin_orb,        ONLY : domag, lspinorb
-  USE funct,           ONLY : write_dft_name
+  USE funct,           ONLY : write_dft_name, dft_is_hybrid
   USE bp,              ONLY : lelfield, gdir, nppstr_3d, efield, nberrycyc, &
                               l3dstring,efield_cart,efield_cry
   USE fixed_occ,       ONLY : f_inp, tfixed_occ
@@ -51,6 +51,9 @@ SUBROUTINE summary()
   USE esm,             ONLY : do_comp_esm, esm_summary
   USE martyna_tuckerman,ONLY: do_comp_mt
   USE realus,          ONLY : real_space
+  USE exx,             ONLY : ecutfock
+  USE fcp_variables,   ONLY : lfcpopt, lfcpdyn
+  USE fcp,             ONLY : fcp_summary
   !
   IMPLICIT NONE
   !
@@ -91,7 +94,8 @@ SUBROUTINE summary()
      WRITE( stdout, 102) nelec
   END IF
   WRITE( stdout, 103) nbnd, ecutwfc, ecutrho
-  IF ( lscf) WRITE( stdout, 104) tr2, mixing_beta, nmix, mixing_style
+  IF ( dft_is_hybrid () ) WRITE( stdout, 104) ecutfock
+  IF ( lscf) WRITE( stdout, 105) tr2, mixing_beta, nmix, mixing_style
   !
 100 FORMAT( /,/,5X, &
        &     'bravais-lattice index     = ',I12,/,5X, &
@@ -108,6 +112,8 @@ SUBROUTINE summary()
        &     'kinetic-energy cutoff     = ',F12.4,'  Ry',/,5X, &
        &     'charge density cutoff     = ',F12.4,'  Ry')
 104 FORMAT(5X, &
+       &     'cutoff for Fock operator  = ',F12.4,'  Ry')
+105 FORMAT(5X, &
        &     'convergence threshold     = ',1PE12.1,/,5X, &
        &     'mixing beta               = ',0PF12.4,/,5X, &
        &     'number of iterations used = ',I12,2X,A,' mixing')
@@ -143,9 +149,13 @@ SUBROUTINE summary()
   CALL plugin_summary()
   !
   !
-  ! ... ESM
+  ! ... ESM (Effective screening medium)
   !
   IF ( do_comp_esm )  CALL esm_summary()
+  !
+  ! ... FCP (Ficticious charge particle)
+  !
+  IF ( lfcpopt .or. lfcpdyn )  CALL fcp_summary()
   !
   IF ( do_comp_mt )  WRITE( stdout, &
             '(5X, "Assuming isolated system, Martyna-Tuckerman method",/)')
@@ -478,10 +488,10 @@ SUBROUTINE print_symmetries ( iverbosity, noncolin, domag )
   USE symm_base,       ONLY : nsym, nsym_ns, nsym_na, invsym, s, sr, &
                               t_rev, ftau, sname
   USE rap_point_group, ONLY : code_group, nclass, nelem, elem, &
-       which_irr, char_mat, name_rap, name_class, gname, ir_ram
+       which_irr, char_mat, name_rap, name_class, gname, ir_ram, elem_name
   USE rap_point_group_so, ONLY : nrap, nelem_so, elem_so, has_e, &
        which_irr_so, char_mat_so, name_rap_so, name_class_so, d_spin, &
-       name_class_so1
+       name_class_so1, elem_name_so
   USE rap_point_group_is, ONLY : nsym_is, sr_is, ftau_is, d_spin_is, &
        gname_is, sname_is, code_group_is
   USE cell_base,       ONLY : at
@@ -585,6 +595,8 @@ SUBROUTINE print_symmetries ( iverbosity, noncolin, domag )
              has_e,nclass,nelem_so,elem_so,which_irr_so)
         IF (nclass.ne.nclass_ref) CALL errore('summary', &
              'point double group ?',1)
+        CALL set_class_el_name_so(nsym_is,sname_is,has_e,nclass,nelem_so, &
+                                  elem_so,elem_name_so)
      ELSE
         IF (noncolin) THEN
            CALL set_irr_rap_so(code_group,nclass_ref,nrap,char_mat_so, &
@@ -593,11 +605,14 @@ SUBROUTINE print_symmetries ( iverbosity, noncolin, domag )
                 nelem_so, elem_so,which_irr_so)
            IF (nclass.ne.nclass_ref) CALL errore('summary', &
                 'point double group ?',1)
+           CALL set_class_el_name_so(nsym,sname,has_e,nclass,nelem_so, &
+                                     elem_so,elem_name_so)
         ELSE
            CALL set_irr_rap(code_group,nclass_ref,char_mat,name_rap, &
                 name_class,ir_ram)
            CALL divide_class(code_group,nsym,sr,nclass,nelem,elem,which_irr)
            IF (nclass.ne.nclass_ref) CALL errore('summary','point group ?',1)
+           CALL set_class_el_name(nsym,sname,nclass,nelem,elem,elem_name)
         ENDIF
      ENDIF
      CALL write_group_info(.true.)

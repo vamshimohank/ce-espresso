@@ -1,5 +1,5 @@
 !
-! Copyright (C) 2001-2006 Quantum ESPRESSO group
+! Copyright (C) 2001-2015 Quantum ESPRESSO group
 ! This file is distributed under the terms of the
 ! GNU General Public License. See the file `License'
 ! in the root directory of the present distribution,
@@ -38,7 +38,7 @@ SUBROUTINE print_clock_pw()
    IF ( iverbosity > 0 ) THEN
       CALL print_clock( 'realus:boxes' )
       CALL print_clock( 'realus:spher' )
-      CALL print_clock( 'realus:qsave' )
+      CALL print_clock( 'realus:tabp' )
    END IF
    !
    WRITE( stdout, '(/5x,"Called by electrons:")' )
@@ -51,12 +51,6 @@ SUBROUTINE print_clock_pw()
       CALL print_clock( 'v_xc_meta' )
    END IF
    CALL print_clock( 'newd' )
-   IF ( iverbosity > 0 ) THEN
-      CALL print_clock( 'newd:fftvg' )
-      CALL print_clock( 'newd:qvan2' )
-      CALL print_clock( 'newd:int1' )
-      CALL print_clock( 'newd:int2' )
-   END IF
    CALL print_clock( 'mix_rho' )
 
    CALL print_clock( 'vdW_energy' )
@@ -81,15 +75,11 @@ SUBROUTINE print_clock_pw()
       CALL print_clock( 'wfcrot' )
    ENDIF
    !
-   IF ( iverbosity > 0)  THEN
+   !IF ( iverbosity > 0)  THEN
       WRITE( stdout, '(/5x,"Called by sum_band:")' )
       CALL print_clock( 'sum_band:becsum' )
       CALL print_clock( 'addusdens' )
-      CALL print_clock( 'addus:qvan2' )
-      CALL print_clock( 'addus:strf' )
-      CALL print_clock( 'addus:aux2' )
-      CALL print_clock( 'addus:aux' )
-   ENDIF
+   !ENDIF
    !
    IF ( isolve == 0 ) THEN
       WRITE( stdout, '(/5x,"Called by *egterg:")' )
@@ -105,8 +95,8 @@ SUBROUTINE print_clock_pw()
     CALL print_clock ( 'calbec_rs' )
     CALL print_clock ( 's_psir' )
     CALL print_clock ( 'add_vuspsir' )
-    CALL print_clock ( 'fft_orbital' )
-    CALL print_clock ( 'bfft_orbital' )
+    CALL print_clock ( 'invfft_orbital' )
+    CALL print_clock ( 'fwfft_orbital' )
     CALL print_clock ( 'v_loc_psir' )
    ELSE
     CALL print_clock( 'h_psi' )
@@ -151,6 +141,8 @@ SUBROUTINE print_clock_pw()
    CALL print_clock( 'fft' )
    CALL print_clock( 'ffts' )
    CALL print_clock( 'fftw' )
+   CALL print_clock( 'fftc' )
+   CALL print_clock( 'fftcw' )
    CALL print_clock( 'interpolate' )
    CALL print_clock( 'davcio' )
    !    
@@ -177,16 +169,14 @@ SUBROUTINE print_clock_pw()
       CALL print_clock( 'exx_grid' )
       CALL print_clock( 'exxinit' )
       CALL print_clock( 'vexx' )
-      !CALL print_clock( 'vexx_ngmloop' )
       CALL print_clock( 'exxenergy' )
-      CALL print_clock( 'exxen2' )
-      !CALL print_clock( 'exxen2_ngmloop' )
       CALL print_clock ('cycleig')
       IF( okvan) THEN
         WRITE( stdout, '(/,5X,"EXX+US routines")' )
         CALL print_clock( 'becxx' )
         CALL print_clock( 'addusxx' )
         CALL print_clock( 'newdxx' )
+        CALL print_clock( 'qvan_init' )
         CALL print_clock( 'nlxx_pot' )
       ENDIF
    ENDIF

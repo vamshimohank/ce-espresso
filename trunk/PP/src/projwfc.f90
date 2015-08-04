@@ -22,11 +22,12 @@ PROGRAM do_projwfc
   USE klist,      ONLY : degauss, ngauss, lgauss
   USE io_files,   ONLY : nd_nmbr, prefix, tmp_dir
   USE noncollin_module, ONLY : noncolin
-  USE mp,               ONLY : mp_bcast
-  USE mp_world,         ONLY : world_comm
-  USE mp_global,        ONLY : mp_startup, nproc_ortho
-  USE environment,      ONLY : environment_start, environment_end
-  USE wvfct, ONLY: et, nbnd
+  USE mp,         ONLY : mp_bcast
+  USE mp_world,   ONLY : world_comm
+  USE mp_global,  ONLY : mp_startup, nproc_ortho
+  USE environment,ONLY : environment_start, environment_end
+  USE wvfct,      ONLY : et, nbnd
+  USE basis,      ONLY : natomwfc
   !
   IMPLICIT NONE
   !
@@ -148,12 +149,10 @@ PROGRAM do_projwfc
   IF ( filpdos == ' ') filpdos = prefix
   !
   IF ( tdosinboxes ) THEN
-     IF( nproc_ortho > 1 ) THEN
-        CALL errore ('do_projwfc', 'nproc_ortho > 1 not yet implemented', 1)
-     ELSE
-        CALL projwave_boxes (filpdos, filproj, n_proj_boxes, irmin, irmax, plotboxes)
-     ENDIF
+     CALL projwave_boxes (filpdos, filproj, n_proj_boxes, irmin, irmax, plotboxes)
   ELSE
+     IF ( natomwfc <= 0 ) CALL errore &
+        ('do_projwfc', 'Cannot project on zero atomic wavefunctions!', 1)
      IF (noncolin) THEN
         CALL projwave_nc(filproj, lsym, lwrite_overlaps, lbinary_data )
      ELSE
@@ -312,19 +311,19 @@ MODULE projections
                      nlmchi(nwfc)%n  =  n
                      nlmchi(nwfc)%l  =  l
                      nlmchi(nwfc)%m  =  m
-                     nlmchi(nwfc)%ind  =  m
-                     nlmchi(nwfc)%jj  =  0.d0
+                     nlmchi(nwfc)%ind=  m
+                     nlmchi(nwfc)%jj =  0.d0
                   ENDDO
                   IF ( noncolin) THEN
                      DO m = 1, 2 * l + 1
-                        nlmchi(nwfc+2*l+1)%na = na
-                        nlmchi(nwfc+2*l+1)%n  =  n
-                        nlmchi(nwfc+2*l+1)%l  =  l
-                        nlmchi(nwfc+2*l+1)%m  =  m
-                        nlmchi(nwfc+2*l+1)%ind  =  m+2*l+1
-                        nlmchi(nwfc+2*l+1)%jj  =  0.d0
+                        nwfc=nwfc+1
+                        nlmchi(nwfc)%na = na
+                        nlmchi(nwfc)%n  =  n
+                        nlmchi(nwfc)%l  =  l
+                        nlmchi(nwfc)%m  =  m
+                        nlmchi(nwfc)%ind=  m+2*l+1
+                        nlmchi(nwfc)%jj =  0.d0
                      END DO
-                     nwfc=nwfc+2*l+1
                   ENDIF
                ENDIF
             ENDIF

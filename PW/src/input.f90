@@ -1,5 +1,5 @@
 
-! Copyright (C) 2002-2011 Quantum ESPRESSO group
+! Copyright (C) 2002-2015 Quantum ESPRESSO group
 ! This file is distributed under the terms of the
 ! GNU General Public License. See the file `License'
 ! in the root directory of the present distribution,
@@ -16,7 +16,7 @@ SUBROUTINE iosys()
   ! ...  those in input_parameters, are locally renamed by adding a "_"
   !
   USE kinds,         ONLY : DP
-  USE funct,         ONLY : dft_has_finite_size_correction, &
+  USE funct,         ONLY : dft_is_hybrid, dft_has_finite_size_correction, &
                             set_finite_size_volume, get_inlc 
   USE funct,         ONLY: set_exx_fraction, set_screening_parameter
   USE control_flags, ONLY: adapt_thr, tr2_init, tr2_multi
@@ -64,6 +64,14 @@ SUBROUTINE iosys()
                               nraise_     => nraise, &
                               refold_pos_ => refold_pos
   !
+  USE fcp_variables, ONLY : lfcpopt_ => lfcpopt, &
+                            lfcpdyn_ => lfcpdyn, &
+                            fcp_mu_ => fcp_mu, &
+                            fcp_mass_ => fcp_mass, &
+                            fcp_temperature, &
+                            fcp_relax_step_ => fcp_relax_step, &
+                            fcp_relax_crit_ => fcp_relax_crit
+  !
   USE extfield,      ONLY : tefield_  => tefield, &
                             dipfield_ => dipfield, &
                             edir_     => edir, &
@@ -109,7 +117,8 @@ SUBROUTINE iosys()
                            esm_bc_ => esm_bc, &
                            esm_nfit_ => esm_nfit, &
                            esm_efield_ => esm_efield, &
-                           esm_w_ => esm_w
+                           esm_w_ => esm_w, &
+                           esm_a_ => esm_a
   !
   USE a2F,           ONLY : la2F_ => la2F
   !
@@ -228,11 +237,13 @@ SUBROUTINE iosys()
                                angle1, angle2, constrained_magnetization,     &
                                B_field, fixed_magnetization, report, lspinorb,&
                                starting_spin_angle, assume_isolated,spline_ps,&
-                               vdw_corr, london, london_s6, london_rcut,      &
+                               vdw_corr, london, london_s6, london_rcut, london_c6, &
                                ts_vdw, ts_vdw_isolated, ts_vdw_econv_thr,     &
                                xdm, xdm_a1, xdm_a2,                           &
                                one_atom_occupations,                          &
-                               esm_bc, esm_efield, esm_w, esm_nfit,           &
+                               esm_bc, esm_efield, esm_w, esm_nfit, esm_a,    &
+                               lfcpopt, lfcpdyn, fcp_mu, fcp_mass, fcp_tempw, & 
+                               fcp_relax_step, fcp_relax_crit,                &
                                space_group, uniqueb, origin_choice,           &
                                rhombohedral
   !
@@ -275,7 +286,7 @@ SUBROUTINE iosys()
   !
   USE constraints_module,    ONLY : init_constraint
   USE read_namelists_module, ONLY : read_namelists, sm_not_set
-  USE london_module,         ONLY : init_london, lon_rcut, scal6
+  USE london_module,         ONLY : init_london, lon_rcut, scal6, in_c6
   USE xdm_module,            ONLY : init_xdm, a1i, a2i
   USE tsvdw_module,          ONLY : vdw_isolated, vdw_econv_thr
   USE us,                    ONLY : spline_ps_ => spline_ps
@@ -1142,18 +1153,6 @@ SUBROUTINE iosys()
   nofrac                  = force_symmorphic
   nbnd_                   = nbnd
   !
-  x_gamma_extrapolation_ = x_gamma_extrapolation
-  !
-  nqx1_ = nqx1
-  nqx2_ = nqx2
-  nqx3_ = nqx3
-  !
-  exxdiv_treatment_ = trim(exxdiv_treatment)
-  yukawa_   = yukawa
-  ecutvcut_ = ecutvcut
-  ecutfock_ = ecutfock
-  !
-  vdw_table_name_  = vdw_table_name
   !
   diago_full_acc_ = diago_full_acc
   starting_wfc    = startingwfc
@@ -1182,13 +1181,6 @@ SUBROUTINE iosys()
   trust_radius_ini_ = trust_radius_ini
   w_1_              = w_1
   w_2_              = w_2
-  !
-  ! ... ESM
-  !
-  esm_bc_ = esm_bc
-  esm_efield_ = esm_efield
-  esm_w_ = esm_w
-  esm_nfit_ = esm_nfit
   !
   IF (trim(occupations) /= 'from_input') one_atom_occupations_=.false.
   !
@@ -1239,6 +1231,7 @@ SUBROUTINE iosys()
   IF ( llondon) THEN
      lon_rcut    = london_rcut
      scal6       = london_s6
+     in_c6(:)    = london_c6(:)
   END IF
   IF ( lxdm ) THEN
      a1i = xdm_a1
@@ -1307,6 +1300,49 @@ SUBROUTINE iosys()
      WRITE( stdout, &
           '(5x,"Stress calculation not meaningful in isolated systems",/)' )
   END IF
+  !
+  ! ... ESM
+  !
+  esm_bc_ = esm_bc
+  esm_efield_ = esm_efield
+  esm_w_ = esm_w
+  esm_nfit_ = esm_nfit 
+  esm_a_ = esm_a
+  !
+  IF ( esm_bc .EQ. 'bc4' ) THEN
+    IF ( ABS(esm_w) .LT. 1.D-8 ) THEN
+      CALL errore ('iosys','esm_w too small',1)
+    ELSEIF ( esm_w .GT. 0.D0 ) THEN
+      CALL errore ('iosys','positive esm_w not allowed for bc4',1)
+    ENDIF
+    IF ( esm_a .LT. 1.D-4 ) THEN
+      CALL errore ('iosys','smoothness parameter for bc4 too small',1)
+    ELSEIF ( esm_a .GT. 10.D0 ) THEN
+      CALL errore ('iosys','smoothness parameter for bc4 too big',1)
+    ENDIF
+  ENDIF
+  !
+  ! ... FCP
+  !
+  lfcpopt_        = lfcpopt
+  lfcpdyn_        = lfcpdyn
+  fcp_mu_         = fcp_mu
+  fcp_mass_       = fcp_mass
+  fcp_temperature = fcp_tempw
+  !
+  IF ( lfcpopt .or. lfcpdyn ) THEN
+     IF ( .not. do_comp_esm ) THEN
+        CALL errore ('iosys','FCP optimise/dynamics currently not available without ESM',1)
+     ENDIF
+     IF ( trim( calculation ).NE.'relax'.AND.trim( calculation ).NE.'md')THEN
+        CALL errore ('iosys',"FCP optimise/dynamics only available with calculation = 'relax' and 'md'",1)
+     ENDIF
+  ENDIF
+  !
+  IF ( fcp_temperature == 0.0_DP ) &
+     fcp_temperature = temperature
+  fcp_relax_step_ = fcp_relax_step
+  fcp_relax_crit_ = fcp_relax_crit
   !
   CALL plugin_read_input()
   !
@@ -1419,7 +1455,31 @@ SUBROUTINE iosys()
   !
   CALL readpp ( input_dft )
   !
-  ! Set variables for hybrid functional HSE
+  ! ... set parameters of hybrid functionals
+  !
+  x_gamma_extrapolation_ = x_gamma_extrapolation
+  !
+  nqx1_ = nqx1
+  nqx2_ = nqx2
+  nqx3_ = nqx3
+  !
+  exxdiv_treatment_ = trim(exxdiv_treatment)
+  yukawa_   = yukawa
+  ecutvcut_ = ecutvcut
+  !
+  IF(ecutfock <= 0.0_DP) THEN
+     ! default case
+     ecutfock_ = 4.0_DP*ecutwfc
+  ELSE
+     IF(ecutfock < ecutwfc .OR. ecutfock > ecutrho) CALL errore('iosys', &
+          'ecutfock can not be < ecutwfc or > ecutrho!', 1) 
+     ecutfock_ = ecutfock
+  END IF
+  IF ( lstres .AND. dft_is_hybrid() .AND. npool > 1 )  CALL errore('iosys', &
+         'stress for hybrid functionals not available with pools', 1)
+  !
+  ! ... must be done AFTER dft is read from PP files and initialized
+  ! ... or else the two following parameters will be overwritten
   !
   IF (exx_fraction >= 0.0_DP) CALL set_exx_fraction (exx_fraction)
   IF (screening_parameter >= 0.0_DP) &
@@ -1427,10 +1487,9 @@ SUBROUTINE iosys()
   !
   ! ... read the vdw kernel table if needed
   !
+  vdw_table_name_  = vdw_table_name
   inlc = get_inlc()
-  if (inlc > 0) then
-      call initialize_kernel_table(inlc)
-  endif
+  IF (inlc > 0) CALL initialize_kernel_table(inlc)
   !
   ! ... if DFT finite size corrections are needed, define the appropriate volume
   !
@@ -1490,8 +1549,6 @@ SUBROUTINE iosys()
   IF ( TRIM(wfc_dir) /= TRIM(tmp_dir) ) &
      CALL check_tempdir( wfc_dir, exst, parallelfs )
 
-  ! CALL restart_from_file()
-  !
   RETURN
   !
 END SUBROUTINE iosys

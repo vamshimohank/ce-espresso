@@ -25,14 +25,14 @@ MODULE pw_restart
                           qexml_write_spin, qexml_write_magnetization, &
                           qexml_write_xc, qexml_write_exx, qexml_write_occ, &
                           qexml_write_bz,qexml_write_para, qexml_write_bands_info, &
-                          qexml_write_bands_pw, qexml_wfc_filename, &
+                          qexml_write_bands_pw, qexml_write_esm, qexml_wfc_filename, &
                           default_fmt_version => qexml_default_version, &
                           qexml_save_history, qexml_kpoint_dirname, &
                           qexml_read_header, qexml_read_cell, qexml_read_moving_cell, &
                           qexml_read_planewaves, qexml_read_ions, qexml_read_spin, &
                           qexml_read_magnetization, qexml_read_xc, qexml_read_occ, qexml_read_bz, &
                           qexml_read_bands_info, qexml_read_bands_pw, qexml_read_symmetry, &
-                          qexml_read_efield, qexml_read_para, qexml_read_exx
+                          qexml_read_efield, qexml_read_para, qexml_read_exx, qexml_read_esm
   !
   USE xml_io_base, ONLY :  rho_binary,read_wfc, write_wfc, create_directory
   !
@@ -139,10 +139,11 @@ MODULE pw_restart
                                        get_gau_parameter, &
                                        get_screening_parameter, exx_is_active
       USE exx,                  ONLY : x_gamma_extrapolation, nq1, nq2, nq3, &
-                                       exxdiv_treatment, yukawa, ecutvcut
+                                       exxdiv_treatment, yukawa, ecutvcut, ecutfock
       USE cellmd,               ONLY : lmovecell, cell_factor 
       USE martyna_tuckerman,    ONLY : do_comp_mt
-      USE esm,                  ONLY : do_comp_esm
+      USE esm,                  ONLY : do_comp_esm, esm_nfit, esm_efield, esm_w, &
+                                       esm_a, esm_bc
       USE london_module,        ONLY : scal6, lon_rcut
       USE tsvdw_module,         ONLY : vdw_isolated
       
@@ -445,7 +446,13 @@ MODULE pw_restart
                        ( x_gamma_extrapolation, nq1, nq2, nq3, &
                          exxdiv_treatment, yukawa, ecutvcut, &
                          get_exx_fraction(), get_gau_parameter(), &
-                         get_screening_parameter(), exx_is_active() )
+                         get_screening_parameter(), exx_is_active(), ecutfock )
+         !
+!-------------------------------------------------------------------------------
+! ... ESM
+!-------------------------------------------------------------------------------
+         !
+         CALL qexml_write_esm( esm_nfit, esm_efield, esm_w, esm_a, esm_bc )
          !
 !-------------------------------------------------------------------------------
 ! ... OCCUPATIONS
@@ -820,7 +827,7 @@ MODULE pw_restart
       LOGICAL            :: lcell, lpw, lions, lspin, linit_mag, &
                             lxc, locc, lbz, lbs, lwfc, lheader,          &
                             lsymm, lrho, lefield, ldim, &
-                            lef, lexx
+                            lef, lexx, lesm
       !
       LOGICAL            :: need_qexml
       INTEGER            :: tmp
@@ -857,6 +864,7 @@ MODULE pw_restart
       lefield = .FALSE.
       lef     = .FALSE.
       lexx    = .FALSE.
+      lesm    = .FALSE.
       !
       SELECT CASE( what )
       CASE( 'header' )
@@ -891,6 +899,20 @@ MODULE pw_restart
          lwfc  = .TRUE.
          need_qexml = .TRUE.
          !
+      CASE( 'nowavenobs' )
+         !
+         lcell   = .TRUE.
+         lpw     = .TRUE.
+         lions   = .TRUE.
+         lspin   = .TRUE.
+         linit_mag   = .TRUE.
+         lxc     = .TRUE.
+         locc    = .TRUE.
+         lbz     = .TRUE.
+         lsymm   = .TRUE.
+         lefield = .TRUE.
+         need_qexml = .TRUE.
+
       CASE( 'nowave' )
          !
          lcell   = .TRUE.
@@ -946,6 +968,11 @@ MODULE pw_restart
       CASE( 'exx' )
          !
          lexx       = .TRUE.
+         need_qexml = .TRUE.
+         !
+      CASE( 'esm' )
+         !
+         lesm       = .TRUE.
          need_qexml = .TRUE.
          !
       END SELECT
@@ -1107,7 +1134,7 @@ MODULE pw_restart
          !
          CALL read_ef( ierr )
          IF ( ierr > 0 ) THEN
-            errmsg='error reading Fermi energy in xml data file'
+            errmsg='error reading Fermi energy and number of electrons in xml data file'
             GOTO 100
          END IF
          !
@@ -1117,6 +1144,15 @@ MODULE pw_restart
          CALL read_exx( ierr )
          IF ( ierr > 0 ) THEN
             errmsg='error reading hybrid functional in xml data file'
+            GOTO 100
+         END IF
+         !
+      END IF
+      IF ( lesm ) THEN
+         !
+         CALL read_esm( ierr )
+         IF ( ierr > 0 ) THEN
+            errmsg='error reading ESM restart data in xml data file'
             GOTO 100
          END IF
          !
@@ -2555,10 +2591,10 @@ MODULE pw_restart
     SUBROUTINE read_ef( ierr )
       !------------------------------------------------------------------------
       !
-      ! ... this routine reads only the Fermi energy
+      ! ... this routine reads the Fermi energy and the number of electrons
       !
       USE ener,  ONLY : ef, ef_up, ef_dw
-      USE klist, ONLY : two_fermi_energies
+      USE klist, ONLY : two_fermi_energies, nelec
       !
       IMPLICIT NONE
       INTEGER, INTENT(OUT) :: ierr
@@ -2567,7 +2603,8 @@ MODULE pw_restart
       !
       IF ( ionode ) THEN
          !
-         CALL qexml_read_bands_info( EF = ef , TWO_FERMI_ENERGIES=two_fermi_energies, EF_UP=ef_up, EF_DW=ef_dw, IERR=ierr )
+         CALL qexml_read_bands_info( EF = ef, EF_UP=ef_up, EF_DW=ef_dw, &
+            TWO_FERMI_ENERGIES=two_fermi_energies, NELEC=nelec, IERR=ierr )
          !
       END IF
       !
@@ -2592,6 +2629,7 @@ MODULE pw_restart
       CALL mp_bcast( ef, ionode_id, intra_image_comm )
       CALL mp_bcast( ef_up, ionode_id, intra_image_comm )
       CALL mp_bcast( ef_dw, ionode_id, intra_image_comm )
+      CALL mp_bcast( nelec, ionode_id, intra_image_comm )
       !
       RETURN
       !
@@ -2606,7 +2644,7 @@ MODULE pw_restart
       USE funct,                ONLY : set_exx_fraction, set_screening_parameter, &
                                        set_gau_parameter, enforce_input_dft, start_exx
       USE exx,                  ONLY : x_gamma_extrapolation, nq1, nq2, nq3, &
-                                       exxdiv_treatment, yukawa, ecutvcut
+                                       exxdiv_treatment, yukawa, ecutvcut, ecutfock
       IMPLICIT NONE
       !
       INTEGER,          INTENT(OUT) :: ierr
@@ -2618,7 +2656,7 @@ MODULE pw_restart
               NQX1=nq1, NQX2=nq2, NQX3=nq3, EXXDIV_TREATMENT=exxdiv_treatment, &
               YUKAWA = yukawa, ECUTVCUT=ecutvcut, EXX_FRACTION=exx_fraction, &
               SCREENING_PARAMETER=screening_parameter, GAU_PARAMETER=gau_parameter, &
-              EXX_IS_ACTIVE=exx_is_active, FOUND=found, IERR=ierr )
+              EXX_IS_ACTIVE=exx_is_active, ECUTFOCK=ecutfock, FOUND=found, IERR=ierr )
          !
       ENDIF
       !
@@ -2640,6 +2678,7 @@ MODULE pw_restart
       CALL mp_bcast( screening_parameter, ionode_id, intra_image_comm )
       CALL mp_bcast( gau_parameter, ionode_id, intra_image_comm )
       CALL mp_bcast( exx_is_active, ionode_id, intra_image_comm )
+      CALL mp_bcast( ecutfock, ionode_id, intra_image_comm )
       !
       CALL set_exx_fraction(exx_fraction)
       CALL set_screening_parameter(screening_parameter)
@@ -2649,6 +2688,39 @@ MODULE pw_restart
       RETURN
       !
     END SUBROUTINE read_exx
+    !
+    !------------------------------------------------------------------------
+    SUBROUTINE read_esm( ierr )
+      !------------------------------------------------------------------------
+      !
+      ! ... this routine reads only nelec and ef
+      !
+      USE esm, ONLY : esm_nfit, esm_efield, esm_w, esm_a, esm_bc
+      !
+      IMPLICIT NONE
+      INTEGER, INTENT(OUT) :: ierr
+      !
+      ! ... then selected tags are read from the other sections
+      !
+      IF ( ionode ) THEN
+         !
+         CALL qexml_read_esm( ESM_NFIT = esm_nfit, ESM_EFIELD = esm_efield, &
+           ESM_W = esm_w, ESM_A = esm_a, ESM_BC = esm_bc, IERR=ierr )
+         !
+      END IF
+      !
+      CALL mp_bcast( ierr, ionode_id, intra_image_comm )
+      IF ( ierr > 0 ) RETURN
+      !
+      CALL mp_bcast( esm_nfit,    ionode_id, intra_image_comm )
+      CALL mp_bcast( esm_efield,  ionode_id, intra_image_comm )
+      CALL mp_bcast( esm_w,       ionode_id, intra_image_comm )
+      CALL mp_bcast( esm_a,       ionode_id, intra_image_comm )
+      CALL mp_bcast( esm_bc,      ionode_id, intra_image_comm )
+      !
+      RETURN
+      !
+    END SUBROUTINE read_esm
     !
     !------------------------------------------------------------------------
     SUBROUTINE read_( dirname, ierr )

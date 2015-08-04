@@ -33,7 +33,7 @@ SUBROUTINE gradcorr( rho, rhog, rho_core, rhog_core, etxc, vtxc, v )
   REAL(DP),    INTENT(INOUT) :: v(dfftp%nnr,nspin)
   REAL(DP),    INTENT(INOUT) :: vtxc, etxc
   !
-  INTEGER :: k, ipol, is, nspin0, jpol
+  INTEGER :: k, ipol, is, nspin0, ir, jpol
   !
   REAL(DP),    ALLOCATABLE :: grho(:,:,:), h(:,:,:), dh(:)
   REAL(DP),    ALLOCATABLE :: rhoout(:,:), segni(:), vgg(:,:), vsave(:,:)

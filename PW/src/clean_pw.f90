@@ -39,6 +39,7 @@ SUBROUTINE clean_pw( lflag )
   USE us,                   ONLY : qrad, tab, tab_at, tab_d2y, spline_ps
   USE uspp,                 ONLY : deallocate_uspp
   USE uspp_param,           ONLY : upf
+  USE m_gth,                ONLY : deallocate_gth
   USE ldaU,                 ONLY : deallocate_ldaU
   USE extfield,             ONLY : forcefield
   USE fft_base,             ONLY : dfftp, dffts  
@@ -55,7 +56,7 @@ SUBROUTINE clean_pw( lflag )
   USE london_module,        ONLY : dealloca_london
   USE xdm_module,           ONLY : cleanup_xdm
   USE constraints_module,   ONLY : deallocate_constraint
-  USE realus,               ONLY : deallocatenewdreal
+  USE realus,               ONLY : deallocate_realsp
   USE pseudo_types,         ONLY : deallocate_pseudo_upf
   USE bp,                   ONLY : deallocate_bp_efield
   USE exx,                  ONLY : deallocate_exx
@@ -94,7 +95,7 @@ SUBROUTINE clean_pw( lflag )
   !
   CALL deallocate_ldaU ( lflag )
   !
-  IF ( ALLOCATED( f_inp ) )      DEALLOCATE( f_inp )
+  IF ( ALLOCATED( f_inp ) .and. lflag )      DEALLOCATE( f_inp )
   IF ( ALLOCATED( tetra ) )      DEALLOCATE( tetra )
   !
   ! ... arrays allocated in ggen.f90
@@ -151,6 +152,7 @@ SUBROUTINE clean_pw( lflag )
   END IF
   !
   CALL deallocate_uspp() 
+  CALL deallocate_gth() 
   CALL deallocate_noncol() 
   !
   ! ... arrays allocated in init_run.f90 ( and never deallocated )
@@ -183,7 +185,7 @@ SUBROUTINE clean_pw( lflag )
   !
   ! ... arrays for real-space algorithm
   !
-  CALL  deallocatenewdreal()
+  CALL  deallocate_realsp()
   !
   ! for Wannier_ac
   if (use_wannier) CALL wannier_clean()

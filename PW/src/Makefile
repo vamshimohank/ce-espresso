@@ -23,7 +23,6 @@ addusdens.o \
 addusforce.o \
 addusstress.o \
 allocate_fft.o \
-allocate_fft_custom.o \
 allocate_locpot.o \
 allocate_nlpot.o \
 allocate_wfc.o \
@@ -74,9 +73,11 @@ efermit.o \
 electrons.o \
 eqvect.o \
 esm.o \
+esm_cft.o \
 ewald.o \
 ewald_dipole.o \
 exx.o \
+fcp.o \
 find_group.o \
 forces_bp_efield.o \
 force_cc.o \

@@ -69,7 +69,7 @@ MODULE qexml_module
             qexml_write_planewaves, qexml_write_spin, qexml_write_magnetization, &
             qexml_write_xc, qexml_write_exx, qexml_write_occ, qexml_write_bz, qexml_write_para, &
             qexml_write_bands_pw,qexml_write_bands_cp, qexml_write_bands_info, qexml_write_eig, &
-            qexml_write_gk, qexml_write_wfc, qexml_write_rho
+            qexml_write_gk, qexml_write_wfc, qexml_write_rho, qexml_write_esm
   !
   PUBLIC :: qexml_read_header, qexml_read_status_cp, qexml_read_cell, qexml_read_moving_cell, qexml_read_ions,      &
             qexml_read_symmetry, qexml_read_efield,                   &
@@ -77,7 +77,7 @@ MODULE qexml_module
             qexml_read_occ, qexml_read_bz, qexml_read_phonon,         &
             qexml_read_bands_pw, qexml_read_bands_cp, qexml_read_bands_info,                  &
             qexml_read_gk, qexml_read_wfc, qexml_read_rho, qexml_read_magnetization, &
-            qexml_read_exx, qexml_read_para
+            qexml_read_exx, qexml_read_para, qexml_read_esm
   
   !
   PUBLIC :: qexml_wfc_filename, qexml_create_directory, qexml_save_history, &
@@ -1408,13 +1408,13 @@ CONTAINS
     !------------------------------------------------------------------------
     SUBROUTINE qexml_write_exx( x_gamma_extrapolation, nqx1, nqx2, nqx3, &
                           exxdiv_treatment, yukawa, ecutvcut, exx_fraction, &
-                          gau_parameter, screening_parameter, exx_is_active )
+                          gau_parameter, screening_parameter, exx_is_active, ecutfock )
       !------------------------------------------------------------------------
       !
       LOGICAL,            INTENT(IN) :: x_gamma_extrapolation, exx_is_active
       INTEGER,            INTENT(IN) :: nqx1, nqx2, nqx3
       CHARACTER(LEN=*),   INTENT(IN) :: exxdiv_treatment
-      REAL(DP),           INTENT(IN) :: yukawa, ecutvcut, exx_fraction
+      REAL(DP),           INTENT(IN) :: yukawa, ecutvcut, exx_fraction, ecutfock
       REAL(DP),           INTENT(IN) :: screening_parameter
       REAL(DP),           INTENT(IN) :: gau_parameter
       !
@@ -1430,9 +1430,29 @@ CONTAINS
       call iotk_write_dat(ounit, "screening_parameter", screening_parameter)
       call iotk_write_dat(ounit, "gau_parameter", gau_parameter)
       call iotk_write_dat(ounit, "exx_is_active", exx_is_active)
+      call iotk_write_dat(ounit, "ecutfock", ecutfock)
       CALL iotk_write_end(ounit, "EXACT_EXCHANGE" )
       !
     END SUBROUTINE qexml_write_exx
+    !
+    !
+    !------------------------------------------------------------------------
+    SUBROUTINE qexml_write_esm( esm_nfit, esm_efield, esm_w, esm_a, esm_bc )
+      !------------------------------------------------------------------------
+      !
+      INTEGER,            INTENT(IN) :: esm_nfit
+      REAL(DP),           INTENT(IN) :: esm_efield, esm_w, esm_a
+      CHARACTER(LEN=*),   INTENT(IN) :: esm_bc
+      !
+      CALL iotk_write_begin(ounit, "ESM" )
+      call iotk_write_dat(ounit, "esm_nfit", esm_nfit)
+      call iotk_write_dat(ounit, "esm_efield", esm_efield)
+      call iotk_write_dat(ounit, "esm_w", esm_w)
+      call iotk_write_dat(ounit, "esm_a", esm_a)
+      call iotk_write_dat(ounit, "esm_bc", esm_bc)
+      CALL iotk_write_end(ounit, "ESM" )
+      !
+    END SUBROUTINE qexml_write_esm
     !
     !
     !------------------------------------------------------------------------
@@ -2937,7 +2957,7 @@ CONTAINS
     !------------------------------------------------------------------------
     SUBROUTINE qexml_read_exx( x_gamma_extrapolation, nqx1, nqx2, nqx3, &
                           exxdiv_treatment, yukawa, ecutvcut, exx_fraction, &
-                          screening_parameter, gau_parameter, exx_is_active,&
+                          screening_parameter, gau_parameter, exx_is_active, ecutfock, &
                           found, ierr )
       !----------------------------------------------------------------------
       !
@@ -2947,7 +2967,7 @@ CONTAINS
       INTEGER,          OPTIONAL, INTENT(OUT) :: nqx1, nqx2, nqx3
       CHARACTER(LEN=*), OPTIONAL, INTENT(OUT) :: exxdiv_treatment
       REAL(DP),         OPTIONAL, INTENT(OUT) :: yukawa, ecutvcut, exx_fraction
-      REAL(DP),         OPTIONAL, INTENT(OUT) :: screening_parameter
+      REAL(DP),         OPTIONAL, INTENT(OUT) :: screening_parameter, ecutfock
       REAL(DP),         OPTIONAL, INTENT(OUT) :: gau_parameter
       LOGICAL,                    INTENT(out) :: found
       INTEGER,                    INTENT(out) :: ierr
@@ -2955,7 +2975,7 @@ CONTAINS
       LOGICAL  :: x_gamma_extrapolation_, exx_is_active_
       INTEGER  :: nqx1_, nqx2_, nqx3_
       REAL(DP) :: yukawa_, ecutvcut_, exx_fraction_
-      REAL(DP) :: screening_parameter_
+      REAL(DP) :: screening_parameter_, ecutfock_
       REAL(DP) :: gau_parameter_
       CHARACTER(LEN=80) :: exxdiv_treatment_
       !
@@ -2994,9 +3014,15 @@ CONTAINS
       !
       ! Check if existing, for back-compatibility
       call iotk_scan_dat(iunit, "gau_parameter", gau_parameter_, FOUND=found, IERR=ierr)
+      IF ( .NOT. found )  gau_parameter_=0.0_dp
       IF ( ierr /= 0 ) RETURN
       !
       call iotk_scan_dat(iunit, "exx_is_active", exx_is_active_, IERR=ierr)
+      IF ( ierr /= 0 ) RETURN
+      !
+      ! Check if existing, for back-compatibility
+      call iotk_scan_dat(iunit, "ecutfock", ecutfock_, IERR=ierr, FOUND=found)
+      IF ( .NOT. found )  ecutfock_=-1.0_dp
       IF ( ierr /= 0 ) RETURN
       !
       CALL iotk_scan_end(iunit, "EXACT_EXCHANGE", IERR=ierr)
@@ -3012,13 +3038,62 @@ CONTAINS
       IF ( present(ecutvcut) )                           ecutvcut = ecutvcut_
       IF ( present(exx_fraction) )                   exx_fraction = exx_fraction_
       IF ( present(screening_parameter) )     screening_parameter = screening_parameter_
-      ! Check if found, for back-compatibility
-      IF ( present(gau_parameter) .AND. found )     gau_parameter = gau_parameter_
+      IF ( present(ecutfock) )                           ecutfock = ecutfock_
+      IF ( present(gau_parameter) )                 gau_parameter = gau_parameter_
       IF ( present(exx_is_active) )                 exx_is_active = exx_is_active_
       !
       found = .TRUE.
       !
     END SUBROUTINE qexml_read_exx
+    !
+    !
+    !------------------------------------------------------------------------
+    SUBROUTINE qexml_read_esm( esm_nfit, esm_efield, esm_w, esm_a, esm_bc, ierr )
+      !----------------------------------------------------------------------
+      !
+      IMPLICIT NONE
+      !
+      INTEGER,          OPTIONAL, INTENT(OUT) :: esm_nfit
+      REAL(DP),         OPTIONAL, INTENT(OUT) :: esm_efield, esm_w, esm_a
+      CHARACTER(LEN=*), OPTIONAL, INTENT(OUT) :: esm_bc
+      INTEGER,                    INTENT(out) :: ierr
+      !
+      INTEGER  :: esm_nfit_
+      REAL(DP) :: esm_efield_, esm_w_, esm_a_
+      CHARACTER(LEN=3) :: esm_bc_
+      !
+      !
+      ierr = 0
+      !
+      CALL iotk_scan_begin( iunit, "ESM", IERR=ierr )
+      IF ( ierr /= 0 ) RETURN
+      !
+      call iotk_scan_dat(iunit, "esm_nfit", esm_nfit_, IERR=ierr)
+      IF ( ierr /= 0 ) RETURN
+      !
+      call iotk_scan_dat(iunit, "esm_efield", esm_efield_, IERR=ierr)
+      IF ( ierr /= 0 ) RETURN
+      !
+      call iotk_scan_dat(iunit, "esm_w", esm_w_, IERR=ierr)
+      IF ( ierr /= 0 ) RETURN
+      !
+      call iotk_scan_dat(iunit, "esm_a", esm_a_, IERR=ierr)
+      IF ( ierr /= 0 ) RETURN
+      !
+      call iotk_scan_dat(iunit, "esm_bc", esm_bc_, IERR=ierr)
+      IF ( ierr /= 0 ) RETURN
+      !
+      CALL iotk_scan_end(iunit, "ESM", IERR=ierr)
+      IF ( ierr /= 0 ) RETURN
+      !
+      !
+      IF ( present(esm_nfit) )    esm_nfit    = esm_nfit_
+      IF ( present(esm_efield) )  esm_efield  = esm_efield_
+      IF ( present(esm_w) )       esm_w       = esm_w_
+      IF ( present(esm_a) )       esm_a       = esm_a_
+      IF ( present(esm_bc) )      esm_bc      = esm_bc_
+      !
+    END SUBROUTINE qexml_read_esm
     !
     !
     !------------------------------------------------------------------------

@@ -72,6 +72,7 @@ error_handler.o : io_files.o
 error_handler.o : io_global.o
 error_handler.o : mp.o
 error_handler.o : mp_world.o
+fcp_variables.o : kind.o
 fd_gradient.o : cell_base.o
 fd_gradient.o : fft_base.o
 fd_gradient.o : kind.o
@@ -90,7 +91,6 @@ fft_custom.o : io_global.o
 fft_custom.o : kind.o
 fft_custom.o : mp.o
 fft_custom.o : parallel_include.o
-fft_interfaces.o : fft_base.o
 fft_interfaces.o : fft_parallel.o
 fft_interfaces.o : fft_scalar.o
 fft_interfaces.o : fft_types.o
@@ -119,6 +119,12 @@ griddim.o : io_global.o
 griddim.o : kind.o
 griddim.o : mp.o
 griddim.o : mp_images.o
+gth.o : cell_base.o
+gth.o : constants.o
+gth.o : funct.o
+gth.o : kind.o
+gth.o : parameters.o
+gth.o : pseudo_types.o
 input_parameters.o : kind.o
 input_parameters.o : parameters.o
 input_parameters.o : wannier_new.o
@@ -248,6 +254,7 @@ read_ncpp.o : pseudo_types.o
 read_pseudo.o : atom.o
 read_pseudo.o : constants.o
 read_pseudo.o : funct.o
+read_pseudo.o : gth.o
 read_pseudo.o : io_files.o
 read_pseudo.o : io_global.o
 read_pseudo.o : ions_base.o

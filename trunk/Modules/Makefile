@@ -27,6 +27,7 @@ dspev_drv.o \
 electrons_base.o \
 environment.o \
 error_handler.o \
+fcp_variables.o \
 fd_gradient.o \
 fft_base.o \
 fft_custom.o \
@@ -37,6 +38,7 @@ fft_types.o \
 funct.o \
 generate_function.o \
 griddim.o \
+gth.o \
 input_parameters.o \
 io_files.o \
 io_global.o  \

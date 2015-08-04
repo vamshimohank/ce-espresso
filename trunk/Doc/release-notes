@@ -1,5 +1,42 @@
+Fixed in svn version:
+
+   * PW: incorrect calculation of maximum number of plane waves could lead 
+     to error exit with hybrid functionals and ultrasoft pseudopotentials
+
+Incompatible changes in 5.2.0 version:
+
+   * various "gather" and "scatter" routines removes and replaced by two
+     interface routines gather_grid, scatter_grid, valid for all FFT grids
+     and for both real and complex arrays; realspace_grid_init_custom and
+     realspace_grids_init merged into realspace_grid_init, for each grid
+   * __STD_F95 preprocessing option removed: all compilers that do not allow
+     allocatable arrays in derived types are no longer supported
+
+New in 5.2.0 version:
+
+   * Goedecker-Hutter-Teter pseudopotentials directy supported in analytical
+     form (courtesy of Sebastiano Caravati)
+   * PW: Hybrid functionals with reduced cutoff for Vx\psi should now work
+         also with k-points and for stress calculation
+   * PW: real-space treatment of augmentation charges in USPP and PAW can 
+         be used in (fixed-cell) structural relaxation as well
+   * PW: speedup of USPP with full G-space treatment of augmentation charges
+   * PW: Hybrid functionals for USPP now working
+   * PW: Improved ESM, works also for NEB and with postprocessing codes;
+     constant-bias potential (constant-mu) calculations (PRL109, 266101, 2012)
+     implemented (courtesy of Minoru Otani)
+
+Fixed in 5.2.0 version:
+
+   * PP: projwfc.x wasn't working any longer for noncolinear case without
+     spin-orbit in 5.1.x versions
+   * PW: ordering of beta functions incorrect in USPP + hybrid functionals.
+   * PW: floating-point error could occur in rVV10 functional
+
+
 New in 5.1.2 version:
 
+   * PW: Hybrid functionals for USPP and PAW still have problems, disabled
    * code "molecularpdos.x" computing PDOS on selected molecular orbitals
      separately computed (courtesy of Guido Fratesi)
    * TDDFPT: a few more options, improved documentation, compatibility
@@ -13,7 +50,7 @@ Incompatible changes in 5.1.2 version:
    * PHonon: input variable iverbosity => verbosity
    * The (undocumented) *.evp file of CP uses a slightly different format
      (equally undocumented) since v.5.1.1. In order to use original format,
-     compiles with __OLD_FORMAT preprocessing variable on.
+     compile with __OLD_FORMAT preprocessing variable on.
 
 Fixed in 5.1.2 version:
 
@@ -29,6 +66,10 @@ Fixed in 5.1.2 version:
    * Symmetry printout could lead to error exit in same cases
    * Restarting from incomplete calculation could lead in some cases
      to mysterious crashes due to usage of unitialized communicator
+   * PH: option only_init + US or PAW was not working.
+   * Minor printout bug: the printed number of symmetries with fractional
+     translations was sometimes incorrect in the noncollinear magnetic case.
+ 
 
 Incompatible changes in 5.1.1 version:
 

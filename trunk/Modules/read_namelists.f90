@@ -126,6 +126,9 @@ MODULE read_namelists_module
        saverho = .TRUE.
        memory = 'default'
        !
+       lfcpopt = .FALSE.
+       lfcpdyn = .FALSE.
+       !
        RETURN
        !
      END SUBROUTINE
@@ -245,6 +248,7 @@ MODULE read_namelists_module
        london      = .false.
        london_s6   = 0.75_DP
        london_rcut = 200.00_DP
+       london_c6   = -1.0_DP
        ts_vdw          = .FALSE.
        ts_vdw_isolated = .FALSE.
        ts_vdw_econv_thr = 1.E-6_DP
@@ -257,9 +261,19 @@ MODULE read_namelists_module
        esm_bc='pbc'
        esm_efield=0.0_DP
        esm_w=0.0_DP
+       esm_a=0.0_DP
+       esm_zb=-2.0_DP
        esm_nfit=4
        esm_debug=.FALSE.
        esm_debug_gpmax=0
+       !
+       ! ... FCP
+       !
+       fcp_mu          = 0.0_DP
+       fcp_mass        = 10000.0_DP
+       fcp_tempw       = 0.0_DP
+       fcp_relax_step  = 0.5_DP
+       fcp_relax_crit  = 0.001_DP
        !
        space_group=0
        uniqueb = .FALSE.
@@ -688,6 +702,8 @@ MODULE read_namelists_module
        CALL mp_bcast( tqmmm,         ionode_id, intra_image_comm )
        CALL mp_bcast( vdw_table_name,ionode_id, intra_image_comm )
        CALL mp_bcast( memory,        ionode_id, intra_image_comm )
+       CALL mp_bcast( lfcpopt,       ionode_id, intra_image_comm )
+       CALL mp_bcast( lfcpdyn,       ionode_id, intra_image_comm )
        !
        RETURN
        !
@@ -806,6 +822,7 @@ MODULE read_namelists_module
        CALL mp_bcast( london,                    ionode_id, intra_image_comm )
        CALL mp_bcast( london_s6,                 ionode_id, intra_image_comm )
        CALL mp_bcast( london_rcut,               ionode_id, intra_image_comm )
+       CALL mp_bcast( london_c6,                 ionode_id, intra_image_comm )
        CALL mp_bcast( xdm,                       ionode_id, intra_image_comm )
        CALL mp_bcast( xdm_a1,                    ionode_id, intra_image_comm )
        CALL mp_bcast( xdm_a2,                    ionode_id, intra_image_comm )
@@ -817,9 +834,20 @@ MODULE read_namelists_module
        CALL mp_bcast( esm_bc,             ionode_id, intra_image_comm )
        CALL mp_bcast( esm_efield,         ionode_id, intra_image_comm )
        CALL mp_bcast( esm_w,              ionode_id, intra_image_comm )
+       CALL mp_bcast( esm_a,              ionode_id, intra_image_comm )
+       CALL mp_bcast( esm_zb,             ionode_id, intra_image_comm )
        CALL mp_bcast( esm_nfit,           ionode_id, intra_image_comm )
        CALL mp_bcast( esm_debug,          ionode_id, intra_image_comm )
        CALL mp_bcast( esm_debug_gpmax,    ionode_id, intra_image_comm )
+       !
+       ! ... FCP
+       !
+       CALL mp_bcast( fcp_mu,          ionode_id, intra_image_comm )
+       CALL mp_bcast( fcp_mass,        ionode_id, intra_image_comm )
+       CALL mp_bcast( fcp_tempw,       ionode_id, intra_image_comm )
+       CALL mp_bcast( fcp_relax_step,  ionode_id, intra_image_comm )
+       CALL mp_bcast( fcp_relax_crit,  ionode_id, intra_image_comm )
+       !
        !
        ! ... space group information
        !

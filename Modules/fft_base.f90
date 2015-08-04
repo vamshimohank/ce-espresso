@@ -1,15 +1,13 @@
 !
-! Copyright (C) 2006-2010 Quantum ESPRESSO group
+! Copyright (C) 2006-2015 Quantum ESPRESSO group
 ! This file is distributed under the terms of the
 ! GNU General Public License. See the file `License'
 ! in the root directory of the present distribution,
 ! or http://www.gnu.org/copyleft/gpl.txt .
 !
-!
-!
 !----------------------------------------------------------------------
 ! FFT base Module.
-! Written by Carlo Cavazzoni
+! Written by Carlo Cavazzoni, modified by Paolo Giannozzi
 !----------------------------------------------------------------------
 !
 !=----------------------------------------------------------------------=!
@@ -22,6 +20,13 @@
         USE fft_types, ONLY: fft_dlay_descriptor
 
         IMPLICIT NONE
+
+        INTERFACE gather_grid
+           MODULE PROCEDURE gather_real_grid, gather_complex_grid
+        END INTERFACE
+        INTERFACE scatter_grid
+           MODULE PROCEDURE scatter_real_grid, scatter_complex_grid
+        END INTERFACE
 
         ! ... data structure containing all information
         ! ... about fft data distribution for a given
@@ -44,13 +49,10 @@
 
         PRIVATE
 
-        PUBLIC :: fft_scatter, grid_gather, grid_scatter
         PUBLIC :: dfftp, dffts, dfftb, fft_dlay_descriptor
-        PUBLIC :: cgather_sym, cgather_smooth, cgather_custom
-        PUBLIC :: cscatter_sym, cscatter_smooth, cscatter_custom
-        PUBLIC :: gather_smooth, scatter_smooth
+        PUBLIC :: fft_scatter, gather_grid, scatter_grid
+        PUBLIC :: cgather_sym, cgather_sym_many, cscatter_sym_many
         PUBLIC :: tg_gather, tg_cgather
-        PUBLIC :: cgather_sym_many, cscatter_sym_many
 
 !=----------------------------------------------------------------------=!
       CONTAINS
@@ -385,140 +387,275 @@ SUBROUTINE fft_scatter ( dfft, f_in, nr3x, nxx_, f_aux, ncp_, npp_, isgn, use_tg
   RETURN
 
 END SUBROUTINE fft_scatter
-
-
+!
 !----------------------------------------------------------------------------
-SUBROUTINE grid_gather( f_in, f_out )
+SUBROUTINE gather_real_grid ( dfft, f_in, f_out )
   !----------------------------------------------------------------------------
   !
-  ! ... gathers nproc distributed data on the first processor of every pool
+  ! ... gathers a distributed real-space FFT grid to dfft%root, that is,
+  ! ... the first processor of input descriptor dfft - version for real arrays
   !
-  ! ... REAL*8  f_in  = distributed variable (nxx)
-  ! ... REAL*8  f_out = gathered variable (nr1x*nr2x*nr3x)
+  ! ... REAL*8  f_in  = distributed variable (dfft%nnr)
+  ! ... REAL*8  f_out = gathered variable (dfft%nr1x*dfft%nr2x*dfft%nr3x)
   !
   USE kinds,     ONLY : DP
   USE parallel_include
   !
   IMPLICIT NONE
   !
-  REAL(DP) :: f_in( : ), f_out( : )
+  REAL(DP), INTENT(in) :: f_in (:)
+  REAL(DP), INTENT(inout):: f_out(:)
+  TYPE ( fft_dlay_descriptor ), INTENT(IN) :: dfft
   !
 #if defined (__MPI)
   !
   INTEGER :: proc, info
-  INTEGER :: displs(0:dfftp%nproc-1), recvcount(0:dfftp%nproc-1)
+  ! ... the following are automatic arrays
+  INTEGER :: displs(0:dfft%nproc-1), recvcount(0:dfft%nproc-1)
   !
-  IF( size( f_in ) < dfftp%nnr ) &
-     CALL errore( ' grid_gather ', ' f_in too small ', dfftp%nnr - size( f_in ) )
+  IF( size( f_in ) < dfft%nnr ) &
+     CALL errore( ' gather_grid ', ' f_in too small ', dfftp%nnr-size( f_in ) )
   !
-  CALL start_clock( 'gather' )
+  CALL start_clock( 'gather_grid' )
   !
-  DO proc = 0, ( dfftp%nproc - 1 )
+  DO proc = 0, ( dfft%nproc - 1 )
      !
-     recvcount(proc) = dfftp%nnp * dfftp%npp(proc+1)
-     !
+     recvcount(proc) = dfft%nnp * dfft%npp(proc+1)
      IF ( proc == 0 ) THEN
-        !
         displs(proc) = 0
-        !
      ELSE
-        !
         displs(proc) = displs(proc-1) + recvcount(proc-1)
-        !
      ENDIF
      !
   ENDDO
   !
-  info = size( f_out ) - displs( dfftp%nproc - 1 ) - recvcount( dfftp%nproc - 1 )
+  ! ... the following check should be performed only on processor dfft%root
+  ! ... otherwise f_out must be allocated on all processors even if not used
   !
+  info = size( f_out ) - displs( dfft%nproc-1 ) - recvcount( dfft%nproc-1 )
   IF( info < 0 ) &
-     CALL errore( ' grid_gather ', ' f_out too small ', -info )
+     CALL errore( ' gather_grid ', ' f_out too small ', -info )
   !
   info = 0
   !
-  CALL MPI_GATHERV( f_in, recvcount(dfftp%mype), MPI_DOUBLE_PRECISION, f_out, &
-                    recvcount, displs, MPI_DOUBLE_PRECISION, dfftp%root,    &
-                    dfftp%comm, info )
+  CALL MPI_GATHERV( f_in, recvcount(dfft%mype), MPI_DOUBLE_PRECISION, f_out, &
+                    recvcount, displs, MPI_DOUBLE_PRECISION, dfft%root,      &
+                    dfft%comm, info )
   !
-  CALL errore( 'grid_gather', 'info<>0', info )
+  CALL errore( 'gather_grid', 'info<>0', info )
   !
-  CALL stop_clock( 'gather' )
+  CALL stop_clock( 'gather_grid' )
   !
 #else
-  CALL errore('grid_gather', 'do not use in serial execution', 1)
+  CALL errore('gather_grid', 'do not use in serial execution', 1)
 #endif
   !
   RETURN
   !
-END SUBROUTINE grid_gather
-
+END SUBROUTINE gather_real_grid
 
 !----------------------------------------------------------------------------
-SUBROUTINE grid_scatter( f_in, f_out )
+SUBROUTINE gather_complex_grid ( dfft, f_in, f_out )
   !----------------------------------------------------------------------------
   !
-  ! ... scatters data from the first processor of every pool
+  ! ... gathers a distributed real-space FFT grid to dfft%root, that is,
+  ! ... the first processor of input descriptor dfft - complex arrays
   !
-  ! ... REAL*8  f_in  = gathered variable (nr1x*nr2x*nr3x)
-  ! ... REAL*8  f_out = distributed variable (nxx)
+  ! ... COMPLEX*16  f_in  = distributed variable (dfft%nnr)
+  ! ... COMPLEX*16  f_out = gathered variable (dfft%nr1x*dfft%nr2x*dfft%nr3x)
   !
   USE kinds,     ONLY : DP
   USE parallel_include
   !
   IMPLICIT NONE
   !
-  REAL(DP) :: f_in( : ), f_out( : )
+  COMPLEX(DP), INTENT(in) :: f_in (:)
+  COMPLEX(DP), INTENT(inout):: f_out(:)
+  TYPE ( fft_dlay_descriptor ), INTENT(IN) :: dfft
   !
 #if defined (__MPI)
   !
   INTEGER :: proc, info
-  INTEGER :: displs(0:dfftp%nproc-1), sendcount(0:dfftp%nproc-1)
+  ! ... the following are automatic arrays
+  INTEGER :: displs(0:dfft%nproc-1), recvcount(0:dfft%nproc-1)
   !
-  IF( size( f_out ) < dfftp%nnr ) &
-     CALL errore( ' grid_scatter ', ' f_out too small ', dfftp%nnr - size( f_in ) )
+  IF( 2*size( f_in ) < dfft%nnr ) &
+     CALL errore( ' gather_grid ', ' f_in too small ', dfftp%nnr-size( f_in ) )
   !
-  CALL start_clock( 'scatter' )
+  CALL start_clock( 'gather_grid' )
   !
-  DO proc = 0, ( dfftp%nproc - 1 )
+  DO proc = 0, ( dfft%nproc - 1 )
      !
-     sendcount(proc) = dfftp%nnp * dfftp%npp(proc+1)
-     !
+     recvcount(proc) = 2*dfft%nnp * dfft%npp(proc+1)
      IF ( proc == 0 ) THEN
-        !
         displs(proc) = 0
-        !
      ELSE
-        !
-        displs(proc) = displs(proc-1) + sendcount(proc-1)
-        !
+        displs(proc) = displs(proc-1) + recvcount(proc-1)
      ENDIF
      !
   ENDDO
   !
-  info = size( f_in ) - displs( dfftp%nproc - 1 ) - sendcount( dfftp%nproc - 1 )
+  ! ... the following check should be performed only on processor dfft%root
+  ! ... otherwise f_out must be allocated on all processors even if not used
   !
+  info = 2*size( f_out ) - displs( dfft%nproc - 1 ) - recvcount( dfft%nproc-1 )
   IF( info < 0 ) &
-     CALL errore( ' grid_scatter ', ' f_in too small ', -info )
+     CALL errore( ' gather_grid ', ' f_out too small ', -info )
+  !
+  info = 0
+  !
+  CALL MPI_GATHERV( f_in, recvcount(dfft%mype), MPI_DOUBLE_PRECISION, f_out, &
+                    recvcount, displs, MPI_DOUBLE_PRECISION, dfft%root,      &
+                    dfft%comm, info )
+  !
+  CALL errore( 'gather_grid', 'info<>0', info )
+  !
+  CALL stop_clock( 'gather_grid' )
+  !
+#else
+  CALL errore('gather_grid', 'do not use in serial execution', 1)
+#endif
+  !
+  RETURN
+  !
+END SUBROUTINE gather_complex_grid
+
+!----------------------------------------------------------------------------
+SUBROUTINE scatter_real_grid ( dfft, f_in, f_out )
+  !----------------------------------------------------------------------------
+  !
+  ! ... scatters a real-space FFT grid from dfft%root, first processor of
+  ! ... input descriptor dfft, to all others - opposite of "gather_grid"
+  !
+  ! ... REAL*8  f_in  = gathered variable (dfft%nr1x*dfft%nr2x*dfft%nr3x)
+  ! ... REAL*8  f_out = distributed variable (dfft%nnr)
+  !
+  USE kinds,     ONLY : DP
+  USE parallel_include
+  !
+  IMPLICIT NONE
+  !
+  REAL(DP), INTENT(in) :: f_in (:)
+  REAL(DP), INTENT(inout):: f_out(:)
+  TYPE ( fft_dlay_descriptor ), INTENT(IN) :: dfft
+  !
+#if defined (__MPI)
+  !
+  INTEGER :: proc, info
+  ! ... the following are automatic arrays
+  INTEGER :: displs(0:dfft%nproc-1), sendcount(0:dfft%nproc-1)
+  !
+  IF( size( f_out ) < dfft%nnr ) &
+     CALL errore( ' scatter_grid ', ' f_out too small ', dfft%nnr-size( f_in ) )
+  !
+  CALL start_clock( 'scatter_grid' )
+  !
+  DO proc = 0, ( dfft%nproc - 1 )
+     !
+     sendcount(proc) = dfft%nnp * dfft%npp(proc+1)
+     IF ( proc == 0 ) THEN
+        displs(proc) = 0
+     ELSE
+        displs(proc) = displs(proc-1) + sendcount(proc-1)
+     ENDIF
+     !
+  ENDDO
+  !
+  ! ... the following check should be performed only on processor dfft%root
+  ! ... otherwise f_in must be allocated on all processors even if not used
+  !
+  info = size( f_in ) - displs( dfft%nproc - 1 ) - sendcount( dfft%nproc - 1 )
+  IF( info < 0 ) &
+     CALL errore( ' scatter_grid ', ' f_in too small ', -info )
   !
   info = 0
   !
   CALL MPI_SCATTERV( f_in, sendcount, displs, MPI_DOUBLE_PRECISION,   &
-                     f_out, sendcount(dfftp%mype), MPI_DOUBLE_PRECISION, &
-                     dfftp%root, dfftp%comm, info )
+                     f_out, sendcount(dfft%mype), MPI_DOUBLE_PRECISION, &
+                     dfft%root, dfft%comm, info )
   !
-  CALL errore( 'grid_scatter', 'info<>0', info )
+  CALL errore( 'scatter_grid', 'info<>0', info )
   !
-  IF ( sendcount(dfftp%mype) /= dfftp%nnr ) f_out(sendcount(dfftp%mype)+1:dfftp%nnr) = 0.D0
+  IF ( sendcount(dfft%mype) /= dfft%nnr ) &
+     f_out(sendcount(dfft%mype)+1:dfft%nnr) = 0.D0
   !
-  CALL stop_clock( 'scatter' )
+  CALL stop_clock( 'scatter_grid' )
   !
 #else
-  CALL errore('grid_scatter', 'do not use in serial execution', 1)
+  CALL errore('scatter_grid', 'do not use in serial execution', 1)
 #endif
   !
   RETURN
   !
-END SUBROUTINE grid_scatter
+END SUBROUTINE scatter_real_grid
+!----------------------------------------------------------------------------
+SUBROUTINE scatter_complex_grid ( dfft, f_in, f_out )
+  !----------------------------------------------------------------------------
+  !
+  ! ... scatters a real-space FFT grid from dfft%root, first processor of
+  ! ... input descriptor dfft, to all others - opposite of "gather_grid"
+  !
+  ! ... COMPLEX*16  f_in  = gathered variable (dfft%nr1x*dfft%nr2x*dfft%nr3x)
+  ! ... COMPLEX*16  f_out = distributed variable (dfft%nnr)
+  !
+  USE kinds,     ONLY : DP
+  USE parallel_include
+  !
+  IMPLICIT NONE
+  !
+  COMPLEX(DP), INTENT(in) :: f_in (:)
+  COMPLEX(DP), INTENT(inout):: f_out(:)
+  TYPE ( fft_dlay_descriptor ), INTENT(IN) :: dfft
+  !
+#if defined (__MPI)
+  !
+  INTEGER :: proc, info
+  ! ... the following are automatic arrays
+  INTEGER :: displs(0:dfft%nproc-1), sendcount(0:dfft%nproc-1)
+  !
+  IF( 2*size( f_out ) < dfft%nnr ) &
+     CALL errore( ' scatter_grid ', ' f_out too small ', dfft%nnr-size( f_in ) )
+  !
+  CALL start_clock( 'scatter_grid' )
+  !
+  DO proc = 0, ( dfft%nproc - 1 )
+     !
+     sendcount(proc) = 2*dfft%nnp * dfft%npp(proc+1)
+     IF ( proc == 0 ) THEN
+        displs(proc) = 0
+     ELSE
+        displs(proc) = displs(proc-1) + sendcount(proc-1)
+     ENDIF
+     !
+  ENDDO
+  !
+  ! ... the following check should be performed only on processor dfft%root
+  ! ... otherwise f_in must be allocated on all processors even if not used
+  !
+  info = 2*size( f_in ) - displs( dfft%nproc - 1 ) - sendcount( dfft%nproc - 1 )
+  IF( info < 0 ) &
+     CALL errore( ' scatter_grid ', ' f_in too small ', -info )
+  !
+  info = 0
+  !
+  CALL MPI_SCATTERV( f_in, sendcount, displs, MPI_DOUBLE_PRECISION,   &
+                     f_out, sendcount(dfft%mype), MPI_DOUBLE_PRECISION, &
+                     dfft%root, dfft%comm, info )
+  !
+  CALL errore( 'scatter_grid', 'info<>0', info )
+  !
+  IF ( sendcount(dfft%mype) /= dfft%nnr ) &
+     f_out(sendcount(dfft%mype)+1:dfft%nnr) = 0.D0
+  !
+  CALL stop_clock( 'scatter_grid' )
+  !
+#else
+  CALL errore('scatter_grid', 'do not use in serial execution', 1)
+#endif
+  !
+  RETURN
+  !
+END SUBROUTINE scatter_complex_grid
 !
 ! ... "gather"-like subroutines
 !
@@ -526,7 +663,9 @@ END SUBROUTINE grid_scatter
 SUBROUTINE cgather_sym( f_in, f_out )
   !-----------------------------------------------------------------------
   !
-  ! ... gather complex data for symmetrization (in phonon code)
+  ! ... gather complex data for symmetrization (used in phonon code)
+  ! ... Differs from gather_grid because mpi_allgatherv is used instead
+  ! ... of mpi_gatherv - all data is gathered on ALL processors
   ! ... COMPLEX*16  f_in  = distributed variable (nrxx)
   ! ... COMPLEX*16  f_out = gathered variable (nr1x*nr2x*nr3x)
   !
@@ -548,15 +687,10 @@ SUBROUTINE cgather_sym( f_in, f_out )
   DO proc = 0, ( dfftp%nproc - 1 )
      !
      recvcount(proc) = 2 * dfftp%nnp * dfftp%npp(proc+1)
-     !
      IF ( proc == 0 ) THEN
-        !
         displs(proc) = 0
-        !
      ELSE
-        !
         displs(proc) = displs(proc-1) + recvcount(proc-1)
-        !
      ENDIF
      !
   ENDDO
@@ -569,8 +703,6 @@ SUBROUTINE cgather_sym( f_in, f_out )
   !
   CALL errore( 'cgather_sym', 'info<>0', info )
   !
-!  CALL mp_barrier( dfftp%comm )
-  !
   CALL stop_clock( 'cgather' )
   !
 #else
@@ -580,442 +712,6 @@ SUBROUTINE cgather_sym( f_in, f_out )
   RETURN
   !
 END SUBROUTINE cgather_sym
-!
-!----------------------------------------------------------------------------
-SUBROUTINE cgather_smooth ( f_in, f_out )
-  !----------------------------------------------------------------------------
-  !
-  ! ... gathers data on the smooth AND complex fft grid
-  !
-  ! ... gathers nproc distributed data on the first processor of every pool
-  !
-  ! ... COMPLEX*16  f_in  = distributed variable ( dffts%nnr )
-  ! ... COMPLEX*16  f_out = gathered variable (nr1sx*nr2sx*nr3sx)
-  !
-  USE mp,        ONLY : mp_barrier
-  USE kinds,     ONLY : DP
-  USE parallel_include
-  !
-  IMPLICIT NONE
-  !
-  COMPLEX(DP) :: f_in(:), f_out(:)
-  !
-#if defined (__MPI)
-  !
-  INTEGER :: proc, info
-  INTEGER :: displs(0:dfftp%nproc-1), recvcount(0:dfftp%nproc-1)
-  !
-  !
-  CALL start_clock( 'gather' )
-  !
-  DO proc = 0, ( dfftp%nproc - 1 )
-     !
-     recvcount(proc) = 2 * dffts%nnp * dffts%npp(proc+1)
-     !
-     IF ( proc == 0 ) THEN
-        !
-        displs(proc) = 0
-        !
-     ELSE
-        !
-        displs(proc) = displs(proc-1) + recvcount(proc-1)
-        !
-     ENDIF
-     !
-  ENDDO
-  !
-  CALL mp_barrier( dfftp%comm )
-  !
-  CALL MPI_GATHERV( f_in, recvcount(dfftp%mype), MPI_DOUBLE_PRECISION, f_out, &
-                    recvcount, displs, MPI_DOUBLE_PRECISION, dfftp%root,    &
-                    dfftp%comm, info )
-  !
-  CALL errore( 'cgather_smooth', 'info<>0', info )
-  !
-  CALL stop_clock( 'gather' )
-  !
-#else
-  CALL errore('cgather_smooth', 'do not use in serial execution', 1)
-#endif
-  !
-  RETURN
-  !
-END SUBROUTINE cgather_smooth
-!
-!----------------------------------------------------------------------------
-SUBROUTINE cgather_custom ( f_in, f_out, dfftt )
-  !----------------------------------------------------------------------------
-  !
-  ! ... gathers data on the custom AND complex fft grid
-  !
-  ! ... gathers nproc distributed data on the first processor of every pool
-  !
-  ! ... COMPLEX*16  f_in  = distributed variable ( dfftt%nnr )
-  ! ... COMPLEX*16  f_out = gathered variable (nr1sx*nr2sx*nr3sx)
-  !
-  USE mp,        ONLY : mp_barrier
-  USE kinds,     ONLY : DP
-  USE parallel_include
-  !
-  IMPLICIT NONE
-  !
-  COMPLEX(DP) :: f_in(:), f_out(:)
-  TYPE ( fft_dlay_descriptor ), INTENT(IN) :: dfftt 
-  !
-#if defined (__MPI)
-  !
-  INTEGER :: proc, info
-  INTEGER :: displs(0:dfftp%nproc-1), recvcount(0:dfftp%nproc-1)
-  !
-  !
-  CALL start_clock( 'gather' )
-  !
-  DO proc = 0, ( dfftp%nproc - 1 )
-     !
-     recvcount(proc) = 2 * dfftt%nnp * dfftt%npp(proc+1)
-     !
-     IF ( proc == 0 ) THEN
-        !
-        displs(proc) = 0
-        !
-     ELSE
-        !
-        displs(proc) = displs(proc-1) + recvcount(proc-1)
-        !
-     ENDIF
-     !
-  ENDDO
-  !
-  CALL mp_barrier( dfftp%comm )
-  !
-  CALL MPI_GATHERV( f_in, recvcount(dfftp%mype), MPI_DOUBLE_PRECISION, f_out, &
-                    recvcount, displs, MPI_DOUBLE_PRECISION, dfftp%root,    &
-                    dfftp%comm, info )
-  !
-  CALL errore( 'cgather_custom', 'info<>0', info )
-  !
-  CALL stop_clock( 'gather' )
-  !
-#else
-  CALL errore('cgather_custom', 'do not use in serial execution', 1)
-#endif
-  !
-  RETURN
-  !
-END SUBROUTINE cgather_custom
-!
-! ... "scatter"-like subroutines
-!
-!----------------------------------------------------------------------------
-SUBROUTINE cscatter_sym( f_in, f_out )
-  !----------------------------------------------------------------------------
-  !
-  ! ... scatters data from the first processor of every pool
-  !
-  ! ... COMPLEX*16  f_in  = gathered variable (nr1x*nr2x*nr3x)
-  ! ... COMPLEX*16  f_out = distributed variable (nxx)
-  !
-  USE mp,        ONLY : mp_barrier
-  USE kinds,     ONLY : DP
-  USE parallel_include
-  !
-  IMPLICIT NONE
-  !
-  COMPLEX(DP) :: f_in(:), f_out(:)
-  !
-#if defined (__MPI)
-  !
-  INTEGER :: proc, info
-  INTEGER :: displs(0:dfftp%nproc-1), sendcount(0:dfftp%nproc-1)
-  !
-  !
-  CALL start_clock( 'cscatter_sym' )
-  !
-  DO proc = 0, ( dfftp%nproc - 1 )
-     !
-     sendcount(proc) = 2 * dfftp%nnp * dfftp%npp(proc+1)
-     !
-     IF ( proc == 0 ) THEN
-        !
-        displs(proc) = 0
-        !
-     ELSE
-        !
-        displs(proc) = displs(proc-1) + sendcount(proc-1)
-        !
-     ENDIF
-     !
-  ENDDO
-  !
-  CALL mp_barrier( dfftp%comm )
-  !
-  CALL MPI_SCATTERV( f_in, sendcount, displs, MPI_DOUBLE_PRECISION,   &
-                     f_out, sendcount(dfftp%mype), MPI_DOUBLE_PRECISION, &
-                     dfftp%root, dfftp%comm, info )
-  !
-  CALL errore( 'cscatter_sym', 'info<>0', info )
-  !
-  IF ( sendcount(dfftp%mype) /=  dfftp%nnr  ) f_out(sendcount(dfftp%mype)+1: dfftp%nnr ) = 0.D0
-  !
-  CALL stop_clock( 'cscatter_sym' )
-  !
-#else
-  CALL errore('cscatter_sym', 'do not use in serial execution', 1)
-#endif
-  !
-  RETURN
-  !
-END SUBROUTINE cscatter_sym
-!
-!----------------------------------------------------------------------------
-SUBROUTINE cscatter_smooth( f_in, f_out )
-  !----------------------------------------------------------------------------
-  !
-  ! ... scatters data on the smooth AND complex fft grid
-  ! ... scatters data from the first processor of every pool
-  !
-  ! ... COMPLEX*16  f_in  = gathered variable (nr1sx*nr2sx*nr3sx)
-  ! ... COMPLEX*16  f_out = distributed variable ( dffts%nnr)
-  !
-  USE mp,        ONLY : mp_barrier
-  USE kinds,     ONLY : DP
-  USE parallel_include
-  !
-  IMPLICIT NONE
-  !
-  COMPLEX(DP) :: f_in(:), f_out(:)
-  !
-#if defined (__MPI)
-  !
-  INTEGER :: proc, info
-  INTEGER :: displs(0:dfftp%nproc-1), sendcount(0:dfftp%nproc-1)
-  !
-  !
-  CALL start_clock( 'scatter' )
-  !
-  DO proc = 0, ( dfftp%nproc - 1 )
-     !
-     sendcount(proc) = 2 * dffts%nnp * dffts%npp(proc+1)
-     !
-     IF ( proc == 0 ) THEN
-        !
-        displs(proc) = 0
-        !
-     ELSE
-        !
-        displs(proc) = displs(proc-1) + sendcount(proc-1)
-        !
-     ENDIF
-     !
-  ENDDO
-  !
-  CALL mp_barrier( dfftp%comm )
-  !
-  CALL MPI_SCATTERV( f_in, sendcount, displs, MPI_DOUBLE_PRECISION,   &
-                     f_out, sendcount(dfftp%mype), MPI_DOUBLE_PRECISION, &
-                     dfftp%root, dfftp%comm, info )
-  !
-  CALL errore( 'scatter', 'info<>0', info )
-  !
-  IF ( sendcount(dfftp%mype) /=  dffts%nnr  ) f_out(sendcount(dfftp%mype)+1: dffts%nnr ) = 0.D0
-  !
-  CALL stop_clock( 'scatter' )
-  !
-#else
-  CALL errore('cscatter_smooth', 'do not use in serial execution', 1)
-#endif
-  !
-  RETURN
-  !
-END SUBROUTINE cscatter_smooth
-!
-!----------------------------------------------------------------------------
-SUBROUTINE cscatter_custom( f_in, f_out, dfftt )
-  !----------------------------------------------------------------------------
-  !
-  ! ... scatters data on the custom AND complex fft grid
-  ! ... scatters data from the first processor of every pool
-  !
-  ! ... COMPLEX*16  f_in  = gathered variable (nr1sx*nr2sx*nr3sx)
-  ! ... COMPLEX*16  f_out = distributed variable ( dfftt%nnr)
-  !
-  USE mp,        ONLY : mp_barrier
-  USE kinds,     ONLY : DP
-  USE parallel_include
-  !
-  IMPLICIT NONE
-  !
-  COMPLEX(DP) :: f_in(:), f_out(:)
-  TYPE ( fft_dlay_descriptor ), INTENT(IN) :: dfftt 
-  !
-#if defined (__MPI)
-  !
-  INTEGER :: proc, info
-  INTEGER :: displs(0:dfftp%nproc-1), sendcount(0:dfftp%nproc-1)
-  !
-  !
-  CALL start_clock( 'scatter' )
-  !
-  DO proc = 0, ( dfftp%nproc - 1 )
-     !
-     sendcount(proc) = 2 * dfftt%nnp * dfftt%npp(proc+1)
-     !
-     IF ( proc == 0 ) THEN
-        !
-        displs(proc) = 0
-        !
-     ELSE
-        !
-        displs(proc) = displs(proc-1) + sendcount(proc-1)
-        !
-     ENDIF
-     !
-  ENDDO
-  !
-  CALL mp_barrier( dfftp%comm )
-  !
-  CALL MPI_SCATTERV( f_in, sendcount, displs, MPI_DOUBLE_PRECISION,   &
-                     f_out, sendcount(dfftp%mype), MPI_DOUBLE_PRECISION, &
-                     dfftp%root, dfftp%comm, info )
-  !
-  CALL errore( 'scatter', 'info<>0', info )
-  !
-  IF ( sendcount(dfftp%mype) /=  dfftt%nnr  ) f_out(sendcount(dfftp%mype)+1: dfftt%nnr ) = 0.D0
-  !
-  CALL stop_clock( 'scatter' )
-  !
-#else
-  CALL errore('cscatter_custom', 'do not use in serial execution', 1)
-#endif
-  !
-  RETURN
-  !
-END SUBROUTINE cscatter_custom
-!
-!----------------------------------------------------------------------------
-SUBROUTINE gather_smooth ( f_in, f_out )
-  !----------------------------------------------------------------------------
-  !
-  ! ... gathers data on the smooth AND real fft grid
-  !
-  ! ... gathers nproc distributed data on the first processor of every pool
-  !
-  ! ... REAL*8      f_in  = distributed variable ( dffts%nnr )
-  ! ... REAL*8      f_out = gathered variable (nr1sx*nr2sx*nr3sx)
-  !
-  USE mp,        ONLY : mp_barrier
-  USE kinds,     ONLY : DP
-  USE parallel_include
-  !
-  IMPLICIT NONE
-  !
-  REAL(DP) :: f_in(:), f_out(:)
-  !
-#if defined (__MPI)
-  !
-  INTEGER :: proc, info
-  INTEGER :: displs(0:dffts%nproc-1), recvcount(0:dffts%nproc-1)
-  !
-  !
-  CALL start_clock( 'gather' )
-  !
-  DO proc = 0, ( dffts%nproc - 1 )
-     !
-     recvcount(proc) = dffts%nnp * dffts%npp(proc+1)
-     !
-     IF ( proc == 0 ) THEN
-        !
-        displs(proc) = 0
-        !
-     ELSE
-        !
-        displs(proc) = displs(proc-1) + recvcount(proc-1)
-        !
-     ENDIF
-     !
-  ENDDO
-  !
-  CALL mp_barrier( dffts%comm )
-  !
-  CALL MPI_GATHERV( f_in, recvcount(dffts%mype), MPI_DOUBLE_PRECISION, f_out, &
-                    recvcount, displs, MPI_DOUBLE_PRECISION, dffts%root,    &
-                    dffts%comm, info )
-  !
-  CALL errore( 'gather', 'info<>0', info )
-  !
-  CALL stop_clock( 'gather' )
-  !
-#else
-  CALL errore('gather_smooth', 'do not use in serial execution', 1)
-#endif
-  !
-  RETURN
-  !
-END SUBROUTINE gather_smooth
-!
-!----------------------------------------------------------------------------
-SUBROUTINE scatter_smooth( f_in, f_out )
-  !----------------------------------------------------------------------------
-  !
-  ! ... scatters data on the smooth AND real fft grid
-  ! ... scatters data from the first processor of every pool
-  !
-  ! ... REAL*8      f_in  = gathered variable (nr1sx*nr2sx*nr3sx)
-  ! ... REAL*8      f_out = distributed variable ( dffts%nnr)
-  !
-  USE mp,        ONLY : mp_barrier
-  USE kinds,     ONLY : DP
-  USE parallel_include
-  !
-  IMPLICIT NONE
-  !
-  REAL(DP) :: f_in(:), f_out(:)
-  !
-#if defined (__MPI)
-  !
-  INTEGER :: proc, info
-  INTEGER :: displs(0:dffts%nproc-1), sendcount(0:dffts%nproc-1)
-  !
-  !
-  CALL start_clock( 'scatter' )
-  !
-  DO proc = 0, ( dffts%nproc - 1 )
-     !
-     sendcount(proc) = dffts%nnp * dffts%npp(proc+1)
-     !
-     IF ( proc == 0 ) THEN
-        !
-        displs(proc) = 0
-        !
-     ELSE
-        !
-        displs(proc) = displs(proc-1) + sendcount(proc-1)
-        !
-     ENDIF
-     !
-  ENDDO
-  !
-  CALL mp_barrier( dffts%comm )
-  !
-  CALL MPI_SCATTERV( f_in, sendcount, displs, MPI_DOUBLE_PRECISION,   &
-                     f_out, sendcount(dffts%mype), MPI_DOUBLE_PRECISION, &
-                     dffts%root, dffts%comm, info )
-  !
-  CALL errore( 'scatter', 'info<>0', info )
-  !
-  IF ( sendcount(dffts%mype) /=  dffts%nnr  ) f_out(sendcount(dffts%mype)+1: dffts%nnr ) = 0.D0
-  !
-  CALL stop_clock( 'scatter' )
-  !
-#else
-  CALL errore('scatter_smooth', 'do not use in serial execution', 1)
-#endif
-  !
-  RETURN
-  !
-END SUBROUTINE scatter_smooth
-
-
 !
 SUBROUTINE tg_gather( dffts, v, tg_v )
    !

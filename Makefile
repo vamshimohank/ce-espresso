@@ -22,9 +22,10 @@ default :
 	@echo '  gipaw        NMR and EPR spectra'
 	@echo '  w90          Maximally localised Wannier Functions'
 	@echo '  want         Quantum Transport with Wannier functions'
+	@echo '  west         Many-body perturbation corrections for standard DFT'
 	@echo '  yambo        electronic excitations with plane waves'
+	@echo '  yambo-devel  yambo devel version'
 	@echo '  plumed       Metadynamics plugin for pw or cp'
-	@echo '  epw          Electron-Phonon Coupling with wannier functions, EPW package' 
 	@echo '  gpu          Download the latest QE-GPU package'
 	@echo '  couple       Library interface for coupling to external codes'
 	@echo '  clean        remove executables and objects'
@@ -34,6 +35,9 @@ default :
 	 echo '  tar-gui      create a standalone PWgui tarball from the GUI sources'; fi
 	@echo '  doc          build documentation'
 	@echo '  links        create links to all executables in bin/'
+#	@echo '  epw          Electron-Phonon Coupling with wannier functions, EPW package' 
+gww:
+	@echo '"make gww" is obsolete, use "make gwl" instead '
 
 ###########################################################
 # Main targets
@@ -149,12 +153,17 @@ want : touch-dummy
 
 yambo: touch-dummy
 	( cd install ; $(MAKE) -f plugins_makefile $@ || exit 1 )
+yambo-devel: touch-dummy
+	( cd install ; $(MAKE) -f plugins_makefile $@ || exit 1 )
 
 plumed: touch-dummy
 	( cd install ; $(MAKE) -f plugins_makefile $@ || exit 1 )
 
-epw: touch-dummy
+west: pw touch-dummy
 	( cd install ; $(MAKE) -f plugins_makefile $@ || exit 1 )
+
+#epw: touch-dummy
+#	( cd install ; $(MAKE) -f plugins_makefile $@ || exit 1 )
 
 gpu: touch-dummy
 	( cd install ; $(MAKE) -f plugins_makefile $@ || exit 1 )
@@ -213,7 +222,7 @@ clean : doc_clean
 		CPV Modules PP PW \
 		ACFDT COUPLE GWW XSpectra \
 		clib flib pwtools upftools \
-		dev-tools extlibs Environ \
+		dev-tools extlibs Environ TDDFPT \
 	; do \
 	    if test -d $$dir ; then \
 		( cd $$dir ; \
